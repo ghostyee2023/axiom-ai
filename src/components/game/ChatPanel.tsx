@@ -15,6 +15,10 @@ import {
   ScrollText,
   Lightbulb,
   Lock,
+  Target,
+  ListChecks,
+  ShieldQuestion,
+  GitCompare,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
@@ -31,19 +35,32 @@ export default function ChatPanel({
   const sendChatMessage = useGameStore((s) => s.sendChatMessage);
   const isChatLoading = useGameStore((s) => s.isChatLoading);
   const chatWaitStage = useGameStore((s) => s.chatWaitStage);
+  const chatError = useGameStore((s) => s.chatError);
   const retryLastChatMessage = useGameStore((s) => s.retryLastChatMessage);
   const subPhase = useGameStore((s) => s.subPhase);
   const diceRolled = useGameStore((s) => s.diceRolled);
   const currentTask = useGameStore((s) => s.currentTask);
   const unlockedHints = useGameStore((s) => s.unlockedHints);
   const unlockedHiddenData = useGameStore((s) => s.unlockedHiddenData);
+  const decisionHistory = useGameStore((s) => s.decisionHistory);
+  const branchContexts = useGameStore((s) => s.branchContexts);
+  const taskScores = useGameStore((s) => s.taskScores);
+  const totalScore = useGameStore((s) => s.totalScore);
 
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isCrisisAndNotRolled = subPhase === "crisis" && !diceRolled;
-  const quickRefs = buildQuickReferences(currentTask, unlockedHints, unlockedHiddenData);
+  const quickRefs = buildQuickReferences(
+    currentTask,
+    unlockedHints,
+    unlockedHiddenData,
+    decisionHistory,
+    branchContexts,
+    taskScores,
+    totalScore
+  );
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -74,6 +91,20 @@ export default function ChatPanel({
     setInput((current) => {
       const prefix = current.trim() ? `${current.trim()}\n\n` : "";
       return `${prefix}【引用${ref.label}】\n${ref.content}\n\n请基于以上信息继续帮我分析。`;
+    });
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      }
+    });
+  };
+
+  const applyThinkingCard = (card: ThinkingCard) => {
+    setInput((current) => {
+      const prefix = current.trim() ? `${current.trim()}\n\n` : "";
+      return `${prefix}${card.prompt}`;
     });
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
@@ -155,7 +186,9 @@ export default function ChatPanel({
                 <Clock className="w-4 h-4 text-red-300 mt-0.5" />
                 <div>
                   <p className="text-xs text-red-100/80 font-medium">AI 这次没有顺利回复。</p>
-                  <p className="text-[11px] text-white/42 mt-1">你的上一条输入已保留，可以直接重试。</p>
+                  <p className="text-[11px] text-white/42 mt-1">
+                    {chatError || "你的上一条输入已保留，可以直接重试。"}
+                  </p>
                   <button
                     onClick={retryLastChatMessage}
                     className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-white bg-white/8 hover:bg-white/12 border border-white/10 transition-colors"
@@ -196,11 +229,9 @@ export default function ChatPanel({
           backdropFilter: "blur(12px)",
         }}
       >
-        {quickRefs.length > 0 && (
-          <div className="mb-2 flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
-            <span className="shrink-0 text-[10px] font-semibold text-white/32 px-1">
-              引用资料
-            </span>
+        <div className="mb-2 flex items-center gap-1.5 flex-wrap">
+          {quickRefs.length > 0 && (
+            <>
             {quickRefs.map((ref) => {
               const Icon = ref.icon;
               return (
@@ -226,8 +257,10 @@ export default function ChatPanel({
                 </button>
               );
             })}
-          </div>
-        )}
+            </>
+          )}
+          <ThinkingCardStrip onUse={applyThinkingCard} />
+        </div>
         <div className="flex items-end gap-1.5 sm:gap-2">
           <textarea
             ref={textareaRef}
@@ -274,6 +307,98 @@ export default function ChatPanel({
   );
 }
 
+function ThinkingCardStrip({ onUse }: { onUse: (card: ThinkingCard) => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border transition-colors"
+        style={{
+          background: open ? "rgba(139, 92, 246, 0.12)" : "rgba(255,255,255,0.035)",
+          borderColor: open ? "rgba(139, 92, 246, 0.22)" : "rgba(255,255,255,0.08)",
+          color: open ? "#ddd6fe" : "rgba(255,255,255,0.52)",
+        }}
+      >
+        <Lightbulb className="w-3 h-3" />
+        思考卡
+      </button>
+
+      {open && (
+        <div className="basis-full mt-1 grid grid-cols-2 sm:grid-cols-3 gap-1.5 animate-fade-in-up">
+          {thinkingCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <button
+                key={card.id}
+                onClick={() => onUse(card)}
+                className="rounded-lg px-2.5 py-2 text-left border transition-all hover:scale-[1.01] active:scale-[0.99]"
+                style={{
+                  background: "rgba(10, 14, 26, 0.62)",
+                  borderColor: "rgba(139, 92, 246, 0.14)",
+                }}
+              >
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-violet-200">
+                  <Icon className="w-3 h-3 text-cyan-300" />
+                  {card.title}
+                </div>
+                <div className="mt-1 text-[10px] leading-relaxed text-white/38">{card.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+type ThinkingCard = {
+  id: string;
+  title: string;
+  desc: string;
+  prompt: string;
+  icon: React.ElementType;
+};
+
+const thinkingCards: ThinkingCard[] = [
+  {
+    id: "goal",
+    title: "澄清目标",
+    desc: "先确认真正要解决什么。",
+    icon: Target,
+    prompt: "请先帮我澄清这个任务的真正目标：我应该优先解决什么？哪些目标可能互相冲突？",
+  },
+  {
+    id: "missing",
+    title: "反问缺口",
+    desc: "让 AI 倒逼业务理解。",
+    icon: ShieldQuestion,
+    prompt: "请不要直接给方案。先反问我 3 个最关键的业务问题，帮助我补齐决策所需信息。",
+  },
+  {
+    id: "compare",
+    title: "三案比较",
+    desc: "保守、稳健、进攻。",
+    icon: GitCompare,
+    prompt: "请基于当前信息，给我保守、稳健、进攻三种方向，并比较各自的风险、成本、难度和适用条件。",
+  },
+  {
+    id: "risk",
+    title: "风险预演",
+    desc: "先看方案会怎么失败。",
+    icon: ShieldQuestion,
+    prompt: "请预演这个方案可能失败的 3 个原因，并告诉我分别需要提前准备什么缓冲动作。",
+  },
+  {
+    id: "execution",
+    title: "执行拆解",
+    desc: "转成今天能做的动作。",
+    icon: ListChecks,
+    prompt: "请把目前最可行的方案拆成今天就能执行的步骤，并给出判断是否有效的指标。",
+  },
+];
+
 type QuickReference = {
   id: string;
   label: string;
@@ -286,7 +411,11 @@ type QuickReference = {
 function buildQuickReferences(
   currentTask: ReturnType<typeof useGameStore.getState>["currentTask"],
   unlockedHints: string[],
-  unlockedHiddenData: string[]
+  unlockedHiddenData: string[],
+  decisionHistory: ReturnType<typeof useGameStore.getState>["decisionHistory"],
+  branchContexts: ReturnType<typeof useGameStore.getState>["branchContexts"],
+  taskScores: ReturnType<typeof useGameStore.getState>["taskScores"],
+  totalScore: number
 ): QuickReference[] {
   if (!currentTask || currentTask.type !== "main") return [];
 
@@ -295,15 +424,13 @@ function buildQuickReferences(
   const contract = record.contract as ContractData | undefined;
   const hiddenData = record.hiddenData ? String(record.hiddenData) : "";
   const hiddenLabel = record.hiddenDataLabel ? String(record.hiddenDataLabel) : "隐藏情报";
-  const isAutoData =
-    currentTask.data === "（系统将根据你在上一关的选择，自动填充守店方案或转型方案的上下文）" ||
-    currentTask.data === "（系统自动汇总你在前9个任务中的关键决策和评分）";
+  const displayData = buildChatReferenceData(currentTask, decisionHistory, branchContexts, taskScores, totalScore);
 
-  if (currentTask.data && !isAutoData) {
+  if (displayData) {
     refs.push({
       id: "task-data",
       label: "参考资料",
-      content: currentTask.data,
+      content: displayData,
       icon: FileSearch,
     });
   }
@@ -341,6 +468,42 @@ function buildQuickReferences(
   return refs;
 }
 
+function buildChatReferenceData(
+  currentTask: Extract<ReturnType<typeof useGameStore.getState>["currentTask"], { type: "main" }>,
+  decisionHistory: ReturnType<typeof useGameStore.getState>["decisionHistory"],
+  branchContexts: ReturnType<typeof useGameStore.getState>["branchContexts"],
+  taskScores: ReturnType<typeof useGameStore.getState>["taskScores"],
+  totalScore: number
+) {
+  const rawData = currentTask.data || "";
+  if (currentTask.id === "task_9" || rawData.includes("系统将根据你在上一关的选择")) {
+    const latestDecision = decisionHistory[decisionHistory.length - 1] || "暂无上一关选择记录。";
+    const latestBranch = branchContexts[branchContexts.length - 1];
+    return [
+      "【上一关选择】",
+      latestDecision,
+      latestBranch ? `\n【延续影响】\n${latestBranch.context}\n下一步压力：${latestBranch.nextPressure}` : "",
+      "\n【本关要求】\n把上一选择拆成3个月执行计划，必须包含时间表、里程碑、资源需求、风险预案。",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (currentTask.id === "task_10" || rawData.includes("系统自动汇总")) {
+    const scoreSummary = taskScores.length > 0
+      ? taskScores.map((ts) => `${ts.title}：${ts.weightedTotal}分`).join("；")
+      : "暂无评分记录。";
+    const historySummary = decisionHistory.length > 0
+      ? decisionHistory.slice(-8).join("\n")
+      : "暂无关键决策记录。";
+    return [
+      `【历史评分】\n${scoreSummary}`,
+      `\n【当前决策力】\n${totalScore}分`,
+      `\n【关键决策记录】\n${historySummary}`,
+    ].join("\n");
+  }
+
+  return rawData;
+}
+
 function contractToReferenceText(contract: ContractData) {
   const lines = [
     `合同名称：${contract.title}`,
@@ -358,6 +521,7 @@ function contractToReferenceText(contract: ContractData) {
 
 function ThinkingBubble({ stage }: { stage: "idle" | "connecting" | "thinking" | "slow" | "error" }) {
   const [tipIndex, setTipIndex] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const tips = [
     "经营顾问正在梳理你的问题...",
     "正在核对关键数据和约束...",
@@ -368,6 +532,11 @@ function ThinkingBubble({ stage }: { stage: "idle" | "connecting" | "thinking" |
     const timer = setInterval(() => setTipIndex((i) => (i + 1) % tips.length), 3200);
     return () => clearInterval(timer);
   }, [tips.length]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const label =
     stage === "connecting"
@@ -393,6 +562,9 @@ function ThinkingBubble({ stage }: { stage: "idle" | "connecting" | "thinking" |
           </div>
           <span className={`text-xs font-medium ${stage === "slow" ? "text-amber-300" : "text-violet-300"}`}>
             {label}
+          </span>
+          <span className="text-[10px] text-white/25 tabular-nums">
+            {elapsed}s
           </span>
         </div>
         {stage === "slow" && (

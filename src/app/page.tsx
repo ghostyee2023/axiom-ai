@@ -276,7 +276,62 @@ export default function GamePage() {
           effectiveMobileTab === "chat" ? "flex flex-col flex-1" : "hidden"
         } lg:flex lg:flex-col lg:flex-1 min-h-0`}>
           {subPhase === "checkpoint" ? (
-            <ReviewPanel />
+            <>
+              <ReviewPanel />
+              {currentTask?.type === "checkpoint" && (
+                <div
+                  className="lg:hidden shrink-0 p-3 space-y-2"
+                  style={{
+                    background: "rgba(10, 14, 26, 0.92)",
+                    borderTop: "1px solid rgba(245, 158, 11, 0.12)",
+                  }}
+                >
+                  {currentTask.checkpoint.shop && (
+                    <button
+                      onClick={showShop}
+                      className="w-full py-2.5 rounded-lg font-medium text-sm transition-all duration-200 flex items-center justify-center gap-2"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.05))",
+                        border: "1px solid rgba(245, 158, 11, 0.2)",
+                        color: "#fbbf24",
+                      }}
+                    >
+                      <ShoppingBag className="w-4 h-4" />
+                      {strings.shop_title}
+                    </button>
+                  )}
+                  <button
+                    onClick={continueAfterCheckpoint}
+                    disabled={isFinalCheckpoint && (isReviewLoading || !reviewReport || isFinalReportLoading)}
+                    className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    style={{
+                      background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+                    }}
+                  >
+                    {isFinalCheckpoint ? (
+                      isReviewLoading && !reviewReport ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          AI复盘分析中...
+                        </>
+                      ) : isFinalReportLoading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          报告生成中...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-4 h-4" />
+                          查看最终报告
+                        </>
+                      )
+                    ) : (
+                      strings.next_level_button
+                    )}
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <ChatPanel onOpenTaskIntel={() => setTaskIntelOpenForStep(true)} />
           )}

@@ -129,34 +129,35 @@ export default function RoleSelection() {
                 className="animate-hero-card-enter group relative text-left"
                 style={{
                   animationDelay: `${index * 0.15}s`,
-                  transform: isHovered ? "scale(1.02)" : "scale(1)",
-                  transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                  transform: isHovered ? "translateY(-3px)" : "translateY(0)",
+                  transition: "transform 0.25s ease, box-shadow 0.25s ease",
                   boxShadow: isHovered ? colors.glowShadow : "none",
                   borderRadius: "1rem",
                 }}
               >
-                {/* Animated gradient border wrapper */}
+                {/* Border wrapper: use the border for state, keep the body dark for readability. */}
                 <div
-                  className="rounded-2xl p-[1.5px]"
+                  className="rounded-2xl p-[1.5px] transition-colors duration-300"
                   style={{
                     background: isHovered
-                      ? colors.gradient
-                      : `linear-gradient(135deg, ${colors.accent}44, transparent, ${colors.accent}44)`,
-                    transition: "background 0.3s ease",
+                      ? `linear-gradient(135deg, ${colors.accent}dd, ${colors.accent}55)`
+                      : `linear-gradient(135deg, ${colors.accent}44, rgba(255,255,255,0.08), ${colors.accent}22)`,
                   }}
                 >
                   {/* Card body */}
                   <div
-                    className="rounded-2xl p-5 relative overflow-hidden"
+                    className="rounded-2xl p-5 relative overflow-hidden transition-colors duration-300"
                     style={{
-                      background: `linear-gradient(180deg, ${colors.bg}, rgba(26, 16, 64, 0.5))`,
+                      background: isHovered
+                        ? `linear-gradient(180deg, rgba(22, 17, 48, 0.96), rgba(18, 14, 40, 0.98))`
+                        : `linear-gradient(180deg, rgba(20, 15, 44, 0.9), rgba(16, 12, 36, 0.96))`,
                     }}
                   >
-                    {/* Hover glow overlay - subtle, no text wash-out */}
+                    {/* Hover glow overlay stays behind text and avoids washing out copy. */}
                     <div
                       className="absolute inset-0 rounded-2xl pointer-events-none transition-opacity duration-500"
                       style={{
-                        background: `radial-gradient(ellipse at center, ${colors.accent}08, transparent 70%)`,
+                        background: `radial-gradient(ellipse at top right, ${colors.accent}18, transparent 55%)`,
                         opacity: isHovered ? 1 : 0,
                       }}
                     />
@@ -184,12 +185,9 @@ export default function RoleSelection() {
                         </div>
                         <div>
                           <h3
-                            className="text-lg font-bold"
+                            className="text-lg font-bold text-white"
                             style={{
-                              backgroundImage: colors.gradient,
-                              WebkitBackgroundClip: "text",
-                              WebkitTextFillColor: "transparent",
-                              backgroundClip: "text",
+                              color: isHovered ? "#ffffff" : "#f8fafc",
                             }}
                           >
                             {role.name}
@@ -238,16 +236,16 @@ export default function RoleSelection() {
                       {role.backstory && (
                         <div
                           className="pt-3 mt-1"
-                          style={{ borderTop: `1px solid ${colors.accent}15` }}
+                          style={{ borderTop: `1px solid ${colors.accent}22` }}
                         >
                           <div
-                            className="flex items-center gap-1.5 text-xs mb-1.5"
-                            style={{ color: `${colors.accent}99` }}
+                            className="flex items-center gap-1.5 text-xs mb-1.5 font-medium"
+                            style={{ color: isHovered ? colors.accent : `${colors.accent}cc` }}
                           >
                             <BookOpen className="w-3 h-3" />
                             <span>背景故事</span>
                           </div>
-                          <p className="text-white/60 text-xs leading-relaxed line-clamp-3">
+                          <p className="text-white/70 text-xs leading-relaxed line-clamp-3">
                             {role.backstory}
                           </p>
                         </div>

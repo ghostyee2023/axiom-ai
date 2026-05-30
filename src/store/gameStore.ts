@@ -135,8 +135,10 @@ export interface GameState {
 
   isChatLoading: boolean;
   chatWaitStage: "idle" | "connecting" | "thinking" | "slow" | "error";
+  chatError: string | null;
   lastUserMessage: string | null;
   isJudging: boolean;
+  judgeError: string | null;
   isDiceRolling: boolean;
 
   // Narrative transition
@@ -381,8 +383,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   doubleDiceActive: false,
   isChatLoading: false,
   chatWaitStage: "idle",
+  chatError: null,
   lastUserMessage: null,
   isJudging: false,
+  judgeError: null,
   isDiceRolling: false,
   currentTransition: null,
   decisionHistory: [],
@@ -428,7 +432,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         apiKey: readStoredApiKey(),
         isChatLoading: false,
         chatWaitStage: "idle",
+        chatError: null,
         isJudging: false,
+        judgeError: null,
         isDiceRolling: false,
         isDecisionOptionsLoading: false,
         isReviewLoading: false,
@@ -498,7 +504,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const userMessage: ChatMessage = { role: "user", content: message };
     const newMessages = [...chatMessages, userMessage];
 
-    set({ chatMessages: newMessages, isChatLoading: true, chatWaitStage: "connecting", lastUserMessage: message });
+    set({ chatMessages: newMessages, isChatLoading: true, chatWaitStage: "connecting", chatError: null, lastUserMessage: message });
 
     const slowTimeout = setTimeout(() => {
       if (get().isChatLoading) {
@@ -510,7 +516,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const safetyTimeout = setTimeout(() => {
       if (get().isChatLoading) {
         console.warn("Chat safety timeout triggered - resetting isChatLoading");
-        set({ isChatLoading: false, chatWaitStage: "error" });
+        set({ isChatLoading: false, chatWaitStage: "error", chatError: "AI 响应超时，可能是网络或模型服务较慢。" });
       }
     }, 65000);
 
@@ -525,15 +531,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         cardChallenge = (currentTask as Record<string, unknown>).challenge
           ? String((currentTask as Record<string, unknown>).challenge)
           : currentTask.task;
-        cardData = currentTask.data;
-
-        // Dynamic data for task_10
-        if (currentTask.id === "task_10" && taskScores.length > 0) {
-          const scoreSummary = taskScores
-            .map((ts) => `${ts.title}：${ts.weightedTotal}分`)
-            .join("；");
-          cardData = `你的历史任务评分：${scoreSummary}。总分：${get().totalScore}分。`;
-        }
+        cardData = buildDynamicTaskData(currentTask, get());
       } else if (currentEvent) {
         cardTitle = currentEvent.title;
         cardChallenge = currentEvent.task;
@@ -547,7 +545,18 @@ export const useGameStore = create<GameState>((set, get) => ({
 不要用“你走向柜台”“他沉默片刻”这类叙事表达。
 请直接给出经营分析、关键判断、可执行建议和需要补充的数据。
 如果玩家信息不足或还没有形成结论，请优先追问关键问题，不要强行替玩家下结论。
-表达要像顾问对话：简洁、现实、可落地。`;
+表达要像顾问对话：简洁、现实、可落地。
+
+【AI 决策力训练规则】
+你的目标不是直接替玩家赢游戏，而是训练玩家掌握 AI 决策力。
+当玩家问题太泛时，先反问 2-3 个关键业务问题。
+当玩家缺少业务事实时，提醒他补充客户、成本、库存、合同、预算、人手或时间限制。
+当玩家已有方向时，帮助他比较保守/稳健/激进方案，并指出风险、成本、难度和验证方式。
+每次回答尽量包含：
+- 结论：当前最关键判断
+- 缺口：还缺哪些业务信息
+- 下一步：玩家可以怎么追问或补充
+不要使用“提示词模板教学”的口吻，要把技巧自然藏进经营建议里。`;
       if (expertRoleActive && expertRoleName) {
         systemPrompt += `\n\n当前任务中，你必须扮演"${expertRoleName}"的角色，以该专家的视角提供专业建议。`;
       }
@@ -658,19 +667,15 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       if (data.reply) {
         const assistantMessage: ChatMessage = { role: "assistant", content: data.reply };
-        set({ chatMessages: [...newMessages, assistantMessage], chatWaitStage: "idle" });
+        set({ chatMessages: [...newMessages, assistantMessage], chatWaitStage: "idle", chatError: null });
       } else if (data.error) {
         // API returned an error in JSON format
-        const errorMessage: ChatMessage = { role: "assistant", content: `抱歉，AI暂时无法响应（${data.error}）。请稍后再试。` };
-        set({ chatMessages: [...newMessages, errorMessage], chatWaitStage: "error" });
+        set({ chatWaitStage: "error", chatError: `AI 暂时无法响应：${data.error}` });
       }
     } catch (error) {
       console.error("Chat error:", error);
       const errMsg = error instanceof Error ? error.message : "未知错误";
-      const errorMessage: ChatMessage = { role: "assistant", content: `抱歉，AI暂时无法响应（${errMsg}）。请稍后再试。` };
-      // Re-read chatMessages to avoid stale state
-      const currentMessages = get().chatMessages;
-      set({ chatMessages: [...currentMessages, errorMessage], chatWaitStage: "error" });
+      set({ chatWaitStage: "error", chatError: `AI 暂时无法响应：${errMsg}` });
     } finally {
       clearTimeout(slowTimeout);
       clearTimeout(safetyTimeout);
@@ -686,7 +691,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   submitTask: async (finalAnswer: string) => {
     const { chatMessages, currentTask, currentEvent, expertRoleActive, scoreBonus, taskScores, decisionHistory, apiKey, unlockedHints } = get();
-    set({ isJudging: true });
+    set({ isJudging: true, judgeError: null });
 
     // Not using hint increases innovation level
     if (currentTask?.type === "main" && !unlockedHints.includes(currentTask.id)) {
@@ -796,9 +801,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           oppRevenueBonus = oppCard.reward.decisionCoins ? Math.round(baseMonthlyRevenue * 0.03) : 0;
         }
 
-        const hasDecisionOptions =
-          currentTask?.type === "main" &&
-          Boolean((currentTask as Record<string, unknown>).decisionOptions);
+        const hasDecisionOptions = currentTask?.type === "main";
         const netRevenue = taskRevenue - revenuePenalty + oppRevenueBonus;
         const currentRevenue = get().revenue;
         const newRevenue = Math.round((currentRevenue + netRevenue) * 100) / 100;
@@ -848,6 +851,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     } catch (error) {
       console.error("Judge error:", error);
+      const message = error instanceof Error ? error.message : "评分服务暂时不可用";
+      set({ judgeError: `${message}。对话和方案已保留，可以稍后重试。` });
     } finally {
       set({ isJudging: false });
     }
@@ -1051,35 +1056,23 @@ export const useGameStore = create<GameState>((set, get) => ({
     const currentItemCount = inventory.reduce((sum, i) => sum + i.quantity, 0);
     if (currentItemCount >= maxItems) return;
 
-    const existingItem = inventory.find((i) => i.shopItem.id === item.id);
+    let newInventory = inventory.map((entry) => ({ ...entry }));
+    const existingItem = newInventory.find((i) => i.shopItem.id === item.id);
     if (existingItem) {
       if (existingItem.quantity >= item.limit) return;
       existingItem.quantity += 1;
     } else {
-      inventory.push({ shopItem: item, quantity: 1 });
+      newInventory = [...newInventory, { shopItem: item, quantity: 1 }];
     }
-
-    if (item.effect === "skip_next_crisis") {
-      set({ skipNextCrisis: true });
-      // Buying skip_next_crisis reduces collaboration tendency and increases data dependency
-      get().updateDecisionTraits("collaborationTendency", -5, "购买贵人相助道具");
-      get().updateDecisionTraits("dataDependency", 5, "购买贵人相助道具");
-    }
-    if (item.effect === "boost_score") {
-      const params = item.params as { role: string; scoreBonus: number } | undefined;
-      set({ expertRoleActive: true, expertRoleName: params?.role || "资深商业顾问", scoreBonus: params?.scoreBonus || 2 });
-      // Buying boost_score increases risk appetite
-      get().updateDecisionTraits("riskAppetite", 5, "购买专家名片道具");
-    }
-    if (item.effect === "double_dice") set({ doubleDiceActive: true });
+    const newItemCount = newInventory.reduce((sum, i) => sum + i.quantity, 0);
 
     set({
       decisionCoins: decisionCoins - item.cost,
-      inventory: [...inventory],
+      inventory: newInventory,
       numericChangeLog: [
         ...get().numericChangeLog,
         numericChange("coins", "决策币", decisionCoins, decisionCoins - item.cost, `购买道具：${item.name}`, "商店"),
-        numericChange("item", "道具", currentItemCount, currentItemCount + 1, `获得道具：${item.name}`, "商店"),
+        numericChange("item", "道具", currentItemCount, newItemCount, `获得道具：${item.name}`, "商店"),
       ],
     });
   },
@@ -1089,23 +1082,30 @@ export const useGameStore = create<GameState>((set, get) => ({
     const itemIndex = inventory.findIndex((i) => i.shopItem.id === itemId);
     if (itemIndex === -1) return;
     const item = inventory[itemIndex];
-    if (item.shopItem.effect === "skip_next_crisis") set({ skipNextCrisis: true });
+    const currentItemCount = inventory.reduce((sum, i) => sum + i.quantity, 0);
+    if (item.shopItem.effect === "skip_next_crisis") {
+      set({ skipNextCrisis: true });
+      get().updateDecisionTraits("collaborationTendency", -5, "使用贵人相助道具");
+      get().updateDecisionTraits("dataDependency", 5, "使用贵人相助道具");
+    }
     if (item.shopItem.effect === "boost_score") {
       const params = item.shopItem.params as { role: string; scoreBonus: number } | undefined;
       set({ expertRoleActive: true, expertRoleName: params?.role || "资深商业顾问", scoreBonus: params?.scoreBonus || 2 });
+      get().updateDecisionTraits("riskAppetite", 5, "使用专家名片道具");
     }
     if (item.shopItem.effect === "double_dice") set({ doubleDiceActive: true });
+    const newInventory = inventory.map((entry) => ({ ...entry }));
     if (item.quantity > 1) {
-      inventory[itemIndex] = { ...item, quantity: item.quantity - 1 };
+      newInventory[itemIndex] = { ...item, quantity: item.quantity - 1 };
     } else {
-      inventory.splice(itemIndex, 1);
+      newInventory.splice(itemIndex, 1);
     }
-    const currentItemCount = get().inventory.reduce((sum, i) => sum + i.quantity, 0);
+    const newItemCount = newInventory.reduce((sum, i) => sum + i.quantity, 0);
     set({
-      inventory: [...inventory],
+      inventory: newInventory,
       numericChangeLog: [
         ...get().numericChangeLog,
-        numericChange("item", "道具", currentItemCount, Math.max(0, currentItemCount - 1), `使用道具：${item.shopItem.name}`, "道具"),
+        numericChange("item", "道具", currentItemCount, newItemCount, `使用道具：${item.shopItem.name}`, "道具"),
       ],
     });
   },
@@ -1122,18 +1122,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
 
-    // Check if current task has decision options. This remains as a fallback for
-    // older in-progress saves where scoring was reached before option generation.
+    // All main tasks should now resolve through action cards. This remains as a
+    // fallback for older in-progress saves where scoring was reached first.
     const { currentTask } = get();
     if (currentTask?.type === "main") {
-      const task = currentTask as Record<string, unknown>;
-      const options = task.decisionOptions as DecisionOption[] | undefined;
-      if (options && options.length > 0) {
-        set({ decisionOptionPhase: true });
-        // Start generating AI-based options in the background
-        get().generateDecisionOptions();
-        return;
-      }
+      set({ decisionOptionPhase: true });
+      get().generateDecisionOptions();
+      return;
     }
     // No decision options, advance normally
     set({ currentStepIndex: get().currentStepIndex + 1 });
@@ -1147,6 +1142,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectDecisionOption: (option: DecisionOption) => {
     const { selectedDecisionOption } = get();
     if (selectedDecisionOption) return; // Already selected
+    const selectedOptionId = option.id;
 
     // Set the selected option but DON'T apply effects yet - wait for consequence reveal
     set({
@@ -1156,11 +1152,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // After a short delay, reveal the consequence
     setTimeout(() => {
+      const currentOption = get().selectedDecisionOption;
+      if (!get().decisionOptionPhase || currentOption?.id !== selectedOptionId) return;
       set({ consequenceRevealed: true });
     }, 800);
 
     // After a longer delay, apply effects and advance
     setTimeout(() => {
+      if (!get().decisionOptionPhase || get().selectedDecisionOption?.id !== selectedOptionId) return;
       const { totalScore, decisionCoins, decisionHistory, revenue, branchContexts, currentTask, pendingRevenueEntry } = get();
       const currentOption = get().selectedDecisionOption;
       if (!currentOption) return;
@@ -1186,13 +1185,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       const historyEntry = `「方案选择」：选择了「${currentOption.title}」— ${currentOption.consequence.slice(0, 80)}${currentOption.scoreModifier !== 0 ? `（决策力${currentOption.scoreModifier > 0 ? "+" : ""}${currentOption.scoreModifier}）` : ""}${currentOption.revenueModifier !== 0 ? `（营收${currentOption.revenueModifier > 0 ? "+" : ""}¥${currentOption.revenueModifier.toLocaleString()}）` : ""}`;
       const newDecisionHistory = [...decisionHistory, historyEntry];
 
-      // Add revenue history entry for the decision
+      const stageRevenue = pendingRevenue + currentOption.revenueModifier;
       const revenueEntry: RevenueEntry = {
         taskId: `decision_${Date.now()}`,
-        title: `方案选择：${currentOption.title}`,
-        revenue: currentOption.revenueModifier,
+        title: `阶段营收：${currentOption.title}`,
+        revenue: stageRevenue,
         cumulative: newRevenue,
-        reason: currentOption.consequence.slice(0, 50),
+        reason: `${pendingRevenueEntry ? `${pendingRevenueEntry.reason}；` : ""}${currentOption.consequence.slice(0, 70)}`,
       };
 
       const branchContext = buildBranchContext(currentOption, currentTask);
@@ -1216,9 +1215,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         decisionHistory: newDecisionHistory,
         revenueHistory: [
           ...get().revenueHistory,
-          ...(pendingRevenueEntry
-            ? [{ ...pendingRevenueEntry, cumulative: Math.round((revenue + pendingRevenue) * 100) / 100 }]
-            : []),
           revenueEntry,
         ],
         branchContexts: [...branchContexts, branchContext],
@@ -1228,6 +1224,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       // After another delay, show the full settlement for this round
       setTimeout(() => {
+        if (!get().decisionOptionPhase || get().selectedDecisionOption?.id !== selectedOptionId) return;
         set({
           decisionOptionPhase: false,
           aiDecisionOptions: null,
@@ -1519,8 +1516,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       diceRolled: false, mitigated: false, skipNextCrisis: false, opportunityAccepted: false,
       currentScore: null, finalAnswer: "", rerollCount: 0, expertRoleActive: false,
       expertRoleName: "", scoreBonus: 0, doubleDiceActive: false, isChatLoading: false,
-      chatWaitStage: "idle", lastUserMessage: null,
-      isJudging: false, isDiceRolling: false, currentTransition: null, decisionHistory: [],
+      chatWaitStage: "idle", chatError: null, lastUserMessage: null,
+      isJudging: false, judgeError: null, isDiceRolling: false, currentTransition: null, decisionHistory: [],
       unlockedHints: [], unlockedHiddenData: [],
       decisionTraits: { ...defaultDecisionTraits }, traitHistory: [],
       currentFollowUpTask: null, currentFollowUpData: null,
@@ -1539,7 +1536,8 @@ function applyStep(step: RouteStep, set: (partial: Partial<GameState>) => void, 
     case "main":
       set({
         currentTask: step, subPhase: "task", chatMessages: [], finalAnswer: "",
-        rerollCount: 0, currentScore: null, currentEvent: null,
+        rerollCount: 0, currentScore: null, currentEvent: null, judgeError: null,
+        chatWaitStage: "idle", chatError: null,
       });
       break;
 
@@ -1553,7 +1551,8 @@ function applyStep(step: RouteStep, set: (partial: Partial<GameState>) => void, 
       }
       set({
         currentTask: step, currentEvent: eventCard, chatMessages: [], finalAnswer: "",
-        rerollCount: 0, currentScore: null,
+        rerollCount: 0, currentScore: null, judgeError: null,
+        chatWaitStage: "idle", chatError: null,
       });
       if (eventCard.type === "crisis") {
         set({ subPhase: "crisis", diceResult: null, diceRolled: false, mitigated: false });
@@ -1567,6 +1566,39 @@ function applyStep(step: RouteStep, set: (partial: Partial<GameState>) => void, 
       set({ currentTask: step, subPhase: "checkpoint", currentEvent: null });
       break;
   }
+}
+
+function buildDynamicTaskData(task: MainTask, state: GameState) {
+  const rawData = task.data || "";
+  const isPlanContextPlaceholder = rawData.includes("系统将根据你在上一关的选择");
+  const isReviewPlaceholder = rawData.includes("系统自动汇总");
+
+  if (task.id === "task_9" || isPlanContextPlaceholder) {
+    const latestDecision = state.decisionHistory[state.decisionHistory.length - 1] || "暂无上一关选择记录。";
+    const latestBranch = state.branchContexts[state.branchContexts.length - 1];
+    return [
+      "【上一关选择】",
+      latestDecision,
+      latestBranch ? `\n【延续影响】\n${latestBranch.context}\n下一步压力：${latestBranch.nextPressure}` : "",
+      "\n【本关要求】\n把上一选择拆成3个月执行计划，必须包含时间表、里程碑、资源需求、风险预案。",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (task.id === "task_10" || isReviewPlaceholder) {
+    const scoreSummary = state.taskScores.length > 0
+      ? state.taskScores.map((ts) => `${ts.title}：${ts.weightedTotal}分`).join("；")
+      : "暂无评分记录。";
+    const historySummary = state.decisionHistory.length > 0
+      ? state.decisionHistory.slice(-8).join("\n")
+      : "暂无关键决策记录。";
+    return [
+      `【历史评分】\n${scoreSummary}`,
+      `\n【当前决策力】\n${state.totalScore}分`,
+      `\n【关键决策记录】\n${historySummary}`,
+    ].join("\n");
+  }
+
+  return rawData;
 }
 
 if (typeof window !== "undefined") {
@@ -1605,6 +1637,7 @@ if (typeof window !== "undefined") {
       currentFollowUpTask: state.currentFollowUpTask,
       currentFollowUpData: state.currentFollowUpData,
       decisionOptionPhase: state.decisionOptionPhase,
+      settlementAfterOption: state.settlementAfterOption,
       selectedDecisionOption: state.selectedDecisionOption,
       aiDecisionOptions: state.aiDecisionOptions,
       decisionOptionsNotice: state.decisionOptionsNotice,
@@ -1612,12 +1645,14 @@ if (typeof window !== "undefined") {
       consequenceRevealed: state.consequenceRevealed,
       revenue: state.revenue,
       revenueHistory: state.revenueHistory,
+      pendingRevenueEntry: state.pendingRevenueEntry,
       numericChangeLog: state.numericChangeLog,
       branchContexts: state.branchContexts,
       reviewReport: state.reviewReport,
       reviewedCheckpointId: state.reviewedCheckpointId,
       finalReport: state.finalReport,
       lastUserMessage: state.lastUserMessage,
+      chatError: state.chatError,
     };
     window.localStorage.setItem(LOCAL_SAVE_KEY, JSON.stringify(snapshot));
   });

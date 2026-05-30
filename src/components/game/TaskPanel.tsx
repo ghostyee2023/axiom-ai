@@ -25,7 +25,7 @@ import {
   ClipboardList,
   X,
 } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 
 export default function TaskPanel({
   onOpenAiAid,
@@ -98,7 +98,7 @@ export default function TaskPanel({
       )}
 
       {subPhase === "opportunity" && currentEvent?.type === "opportunity" && (
-        <OpportunityEventCard event={currentEvent as OpportunityCard} />
+        <OpportunityEventCard event={currentEvent as OpportunityCard} onOpenAiAid={onOpenAiAid} />
       )}
 
       {/* Checkpoint Card */}
@@ -400,6 +400,9 @@ function TaskCard({
   const unlockHint = useGameStore((s) => s.unlockHint);
   const unlockHiddenData = useGameStore((s) => s.unlockHiddenData);
   const branchContexts = useGameStore((s) => s.branchContexts);
+  const decisionHistory = useGameStore((s) => s.decisionHistory);
+  const taskScores = useGameStore((s) => s.taskScores);
+  const totalScore = useGameStore((s) => s.totalScore);
 
   const hintUnlocked = unlockedHints.includes(task.id);
   const hiddenDataUnlocked = unlockedHiddenData.includes(task.id);
@@ -414,8 +417,9 @@ function TaskCard({
     ? String((task as Record<string, unknown>).hiddenData)
     : "";
   const contract = (task as Record<string, unknown>).contract as ContractData | undefined;
+  const displayData = buildDisplayTaskData(task, decisionHistory, branchContexts, taskScores, totalScore);
   const dataItems = [
-    task.data ? "参考资料" : null,
+    displayData ? "参考资料" : null,
     hasHiddenData ? hiddenDataLabel : null,
     contract ? "合同" : null,
     "策略锦囊",
@@ -423,15 +427,20 @@ function TaskCard({
 
   const isAutoData =
     task.data === "（系统将根据你在上一关的选择，自动填充守店方案或转型方案的上下文）" ||
+    task.data === "（系统将根据你在上一关的选择，自动填充相关方案的上下文）" ||
     task.data === "（系统自动汇总你在前9个任务中的关键决策和评分）";
   const activeBranchContext = branchContexts[branchContexts.length - 1];
   const branchConclusion = activeBranchContext
     ? buildBranchConclusion(activeBranchContext.nextPressure)
     : "";
+  const taskGoal = buildTaskGoal(task);
+  const impactTags = activeBranchContext
+    ? buildImpactTags(`${activeBranchContext.context} ${activeBranchContext.nextPressure}`)
+    : [];
   const showIntelDrawer = intelOpen ?? internalIntelOpen;
   const setShowIntelDrawer = onIntelOpenChange ?? setInternalIntelOpen;
   const intelTabs = [
-    task.data ? { key: "data", label: "参考资料", icon: FileSearch } : null,
+    displayData ? { key: "data", label: "参考资料", icon: FileSearch } : null,
     contract ? { key: "contract", label: "合同", icon: ScrollText } : null,
     hasHiddenData ? { key: "hidden", label: "情报", icon: FileSearch } : null,
     { key: "hint", label: "锦囊", icon: Lightbulb },
@@ -471,54 +480,64 @@ function TaskCard({
         <div className="relative">
           <div className="min-w-0">
             <h3 className="text-[22px] sm:text-[21px] font-black text-white leading-[1.22]">{task.title}</h3>
+            <div className="mt-2 inline-flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 bg-amber-300/[0.08] border border-amber-300/14">
+              <AlertTriangle className="mt-0.5 w-3.5 h-3.5 shrink-0 text-amber-300" />
+              <span className="text-[12px] leading-relaxed font-semibold text-amber-100">
+                {taskGoal}
+              </span>
+            </div>
           </div>
         </div>
-        <p className="text-white/70 text-sm leading-[1.72] mt-4 relative">
-          {task.description}
-        </p>
-        <div
-          className="mt-4 rounded-xl p-3 relative overflow-hidden"
-          style={{
-            background: "linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.035))",
-            border: "1px solid rgba(245, 158, 11, 0.18)",
-          }}
-        >
-          <div className="flex items-center gap-1.5 text-xs text-amber-300 mb-2">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span className="font-semibold">本关要做</span>
-          </div>
-          <p className="text-white/86 text-sm leading-[1.72]">
-            {(task as Record<string, unknown>).challenge
-              ? String((task as Record<string, unknown>).challenge)
-              : task.task}
-          </p>
-        </div>
+        <MissionInfo
+          tone="main"
+          background={task.description}
+          objective={(task as Record<string, unknown>).challenge
+            ? String((task as Record<string, unknown>).challenge)
+            : task.task}
+          objectiveLabel="本关要做"
+        />
       </div>
 
       {activeBranchContext && (
         <div
-          className="rounded-xl p-3 animate-task-card-enter relative overflow-hidden"
+          className="rounded-2xl px-4 py-3 animate-task-card-enter relative overflow-hidden"
           style={{
             animationDelay: "150ms",
-            background: "linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(16, 185, 129, 0.04))",
+            background: "linear-gradient(135deg, rgba(6, 182, 212, 0.055), rgba(16, 185, 129, 0.035))",
             border: "1px solid rgba(6, 182, 212, 0.16)",
           }}
         >
           <div className="absolute left-0 top-0 bottom-0 w-[4px] rounded-l-xl"
             style={{ background: "linear-gradient(180deg, #06b6d4, #10b981)" }}
           />
-          <div className="pl-2">
-            <div className="flex items-center gap-1.5 text-xs text-cyan-300 mb-1">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="font-semibold">上一选择的影响</span>
-            </div>
-            <p className="text-sm font-bold text-white/86 leading-relaxed">
-              {branchConclusion}
-            </p>
-            <div className="mt-2 rounded-lg px-2.5 py-2 bg-cyan-400/[0.06] border border-cyan-300/10">
-              <div className="text-[10px] font-semibold text-cyan-200/80 mb-0.5">原因</div>
-              <p className="text-[11px] text-white/52 leading-relaxed">{activeBranchContext.context}</p>
-            </div>
+          <div className="pl-2 divide-y divide-white/8 border-y border-white/8">
+            <MissionInfoRow label="上一选择影响" icon={Sparkles} color="#67e8f9">
+              {impactTags.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {impactTags.map((tag) => (
+                    <span
+                      key={tag.label}
+                      className="rounded-md px-2 py-0.5 text-[10px] font-bold"
+                      style={{
+                        color: tag.color,
+                        background: tag.bg,
+                        border: `1px solid ${tag.border}`,
+                      }}
+                    >
+                      {tag.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="text-sm font-bold text-white/86 leading-relaxed">
+                {branchConclusion}
+              </p>
+            </MissionInfoRow>
+            <MissionInfoRow label="原因" icon={FileSearch} color="#a5b4fc">
+              <p className="text-[12px] text-white/52 leading-relaxed">
+                <HighlightNumbers text={activeBranchContext.context} />
+              </p>
+            </MissionInfoRow>
           </div>
         </div>
       )}
@@ -605,16 +624,18 @@ function TaskCard({
               </div>
             </div>
             <div className="max-h-[calc(82vh-7.5rem)] overflow-y-auto custom-scrollbar p-4 space-y-3">
-              {currentIntelTab === "data" && task.data && !isAutoData && (
+              {currentIntelTab === "data" && displayData && !isAutoData && (
                 <div className="rounded-xl p-3 bg-white/[0.035] border border-white/8">
                   <p className="text-sm leading-relaxed text-white/72 whitespace-pre-wrap">
-                    {task.data}
+                    {displayData}
                   </p>
                 </div>
               )}
-              {currentIntelTab === "data" && isAutoData && (
-                <div className="rounded-lg px-3 py-2.5 text-xs text-white/45 border border-white/8 bg-white/[0.035]">
-                  {task.data}
+              {currentIntelTab === "data" && displayData && isAutoData && (
+                <div className="rounded-xl p-3 bg-white/[0.035] border border-white/8">
+                  <p className="text-sm leading-relaxed text-white/72 whitespace-pre-wrap">
+                    {displayData}
+                  </p>
                 </div>
               )}
               {currentIntelTab === "contract" && contract && (
@@ -659,6 +680,64 @@ function buildBranchConclusion(nextPressure: string) {
   if (!trimmed) return "上一轮选择会影响本关的经营判断。";
   const first = trimmed.split(/[；。]/).find(Boolean) || trimmed;
   return first.endsWith("。") ? first : `${first}。`;
+}
+
+function buildTaskGoal(task: MainTask) {
+  const text = `${task.title} ${task.challenge || task.description} ${task.task}`;
+  if (/合同|条款|合作|供应商|采购|谈判/.test(text)) return "判断合作条件是否可承受，明确必须谈清的风险条款。";
+  if (/竞争|客流|营销|活动|会员|爆款|曝光|口碑/.test(text)) return "找到可执行的增长动作，并说明用什么数据验证有效。";
+  if (/扩张|资金|现金|回本|投资|补贴|借款/.test(text)) return "算清现金压力和回本周期，再决定推进、暂缓或分阶段执行。";
+  if (/投诉|危机|差评|信任/.test(text)) return "先修复信任，再建立防止复发的具体流程。";
+  if (/团队|员工|招聘|排班/.test(text)) return "把人手问题拆成职责、排班、训练和交付标准。";
+  if (/复盘|最终|实施计划|计划/.test(text)) return "把已有选择转成阶段计划，明确里程碑、资源和风险预案。";
+  return "把问题、约束、行动和验证方式说清楚，再提交方案。";
+}
+
+function buildImpactTags(text: string) {
+  const tagDefs = [
+    { label: "现金流压力", match: /现金|资金|收入|营收|回本|成本|投入|支出|钱/, color: "#fbbf24", bg: "rgba(245,158,11,0.10)", border: "rgba(245,158,11,0.22)" },
+    { label: "执行压力", match: /执行|人手|员工|时间|里程碑|落地|计划|顶班/, color: "#fca5a5", bg: "rgba(239,68,68,0.10)", border: "rgba(239,68,68,0.22)" },
+    { label: "关系变化", match: /关系|供应商|合作|物业|顾客|熟客|社区|家人|承诺/, color: "#a7f3d0", bg: "rgba(16,185,129,0.10)", border: "rgba(16,185,129,0.22)" },
+    { label: "数据验证", match: /数据|验证|指标|反馈|复盘|调研|系统/, color: "#67e8f9", bg: "rgba(6,182,212,0.10)", border: "rgba(6,182,212,0.22)" },
+    { label: "风险上升", match: /风险|止损|违约|库存|压力|不确定|隐藏成本/, color: "#c4b5fd", bg: "rgba(139,92,246,0.10)", border: "rgba(139,92,246,0.22)" },
+  ];
+  return tagDefs.filter((tag) => tag.match.test(text)).slice(0, 3);
+}
+
+function buildDisplayTaskData(
+  task: MainTask,
+  decisionHistory: string[],
+  branchContexts: ReturnType<typeof useGameStore.getState>["branchContexts"],
+  taskScores: ReturnType<typeof useGameStore.getState>["taskScores"],
+  totalScore: number
+) {
+  const rawData = task.data || "";
+  if (task.id === "task_9" || rawData.includes("系统将根据你在上一关的选择")) {
+    const latestDecision = decisionHistory[decisionHistory.length - 1] || "暂无上一关选择记录。";
+    const latestBranch = branchContexts[branchContexts.length - 1];
+    return [
+      "【上一关选择】",
+      latestDecision,
+      latestBranch ? `\n【延续影响】\n${latestBranch.context}\n下一步压力：${latestBranch.nextPressure}` : "",
+      "\n【本关要求】\n把上一选择拆成3个月执行计划，必须包含时间表、里程碑、资源需求、风险预案。",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (task.id === "task_10" || rawData.includes("系统自动汇总")) {
+    const scoreSummary = taskScores.length > 0
+      ? taskScores.map((ts) => `${ts.title}：${ts.weightedTotal}分`).join("；")
+      : "暂无评分记录。";
+    const historySummary = decisionHistory.length > 0
+      ? decisionHistory.slice(-8).join("\n")
+      : "暂无关键决策记录。";
+    return [
+      `【历史评分】\n${scoreSummary}`,
+      `\n【当前决策力】\n${totalScore}分`,
+      `\n【关键决策记录】\n${historySummary}`,
+    ].join("\n");
+  }
+
+  return rawData;
 }
 
 function ContractInlineView({ contract }: { contract: ContractData }) {
@@ -803,6 +882,80 @@ function SectionLabel({
   );
 }
 
+function MissionInfo({
+  tone,
+  conclusion,
+  background,
+  objective,
+  objectiveLabel,
+}: {
+  tone: "main" | "danger" | "opportunity";
+  conclusion?: string;
+  background: string;
+  objective?: string;
+  objectiveLabel: string;
+}) {
+  const color = tone === "danger" ? "#f87171" : tone === "opportunity" ? "#34d399" : "#fbbf24";
+
+  return (
+    <div className="mt-4 relative divide-y divide-white/8 border-y border-white/8">
+      <MissionInfoRow label="背景" icon={ClipboardList} color="#a5b4fc">
+        {conclusion && <p className="mb-1.5 text-sm font-bold text-white/88">{conclusion}</p>}
+        <p className="text-sm leading-[1.72] text-white/66">
+          <HighlightNumbers text={background} />
+        </p>
+      </MissionInfoRow>
+
+      {objective && (
+        <MissionInfoRow label={objectiveLabel} icon={AlertTriangle} color={color}>
+          <p className="text-white/86 text-sm leading-[1.72]">
+            <HighlightNumbers text={objective} />
+          </p>
+        </MissionInfoRow>
+      )}
+    </div>
+  );
+}
+
+function MissionInfoRow({
+  label,
+  icon: Icon,
+  color,
+  children,
+}: {
+  label: string;
+  icon: React.ElementType;
+  color: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="py-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold tracking-wide" style={{ color }}>
+        <Icon className="w-3 h-3" />
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function HighlightNumbers({ text }: { text: string }) {
+  const parts = text.split(/(\d[\d,]*(?:\.\d+)?\s*(?:元|块|万|%|天|周|月|年|个|人|次|分|枚|家)|[¥￥]\s*\d[\d,]*(?:\.\d+)?)/g);
+  return (
+    <>
+      {parts.map((part, index) =>
+        /(\d|[¥￥])/.test(part) ? (
+          <span key={`${part}-${index}`} className="font-bold text-amber-300 tabular-nums">
+            {part}
+          </span>
+        ) : (
+          <span key={`${part}-${index}`}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
 function CrisisEventCard({ event }: { event: CrisisCard }) {
   const diceResult = useGameStore((s) => s.diceResult);
   const diceRolled = useGameStore((s) => s.diceRolled);
@@ -836,26 +989,12 @@ function CrisisEventCard({ event }: { event: CrisisCard }) {
           </span>
         </div>
 
-        <p className="text-white/60 text-sm leading-relaxed">
-          {event.description}
-        </p>
-
-        <div
-          className="rounded-lg p-3 relative overflow-hidden"
-          style={{
-            background: "rgba(10, 14, 26, 0.5)",
-            border: "1px solid rgba(239, 68, 68, 0.12)",
-          }}
-        >
-          <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg"
-            style={{ background: "linear-gradient(180deg, #ef4444, #f97316)" }}
-          />
-          <div className="flex items-center gap-1.5 text-xs text-red-400 mb-2 pl-2">
-            <AlertTriangle className="w-3 h-3" />
-            <span className="font-semibold">应对任务</span>
-          </div>
-          <p className="text-white/85 text-sm leading-relaxed pl-2">{event.task}</p>
-        </div>
+        <MissionInfo
+          tone="danger"
+          background={event.description}
+          objective={event.task}
+          objectiveLabel="应对任务"
+        />
       </div>
 
       {/* Dice Result */}
@@ -905,11 +1044,12 @@ function CrisisEventCard({ event }: { event: CrisisCard }) {
   );
 }
 
-function OpportunityEventCard({ event }: { event: OpportunityCard }) {
+function OpportunityEventCard({ event, onOpenAiAid }: { event: OpportunityCard; onOpenAiAid?: () => void }) {
   const opportunityAccepted = useGameStore((s) => s.opportunityAccepted);
   const currentFollowUpTask = useGameStore((s) => s.currentFollowUpTask);
 
   return (
+    <>
     <div
       className="rounded-xl p-4 space-y-3 animate-task-card-enter relative overflow-hidden"
       style={{
@@ -938,28 +1078,7 @@ function OpportunityEventCard({ event }: { event: OpportunityCard }) {
         </span>
       </div>
 
-      <p className="text-white/60 text-sm leading-relaxed">
-        {event.description}
-      </p>
-
-      {opportunityAccepted && (
-        <div
-          className="rounded-lg p-3 relative overflow-hidden"
-          style={{
-            background: "rgba(10, 14, 26, 0.5)",
-            border: "1px solid rgba(16, 185, 129, 0.12)",
-          }}
-        >
-          <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg"
-            style={{ background: "linear-gradient(180deg, #10b981, #34d399)" }}
-          />
-          <div className="flex items-center gap-1.5 text-xs text-emerald-400 mb-2 pl-2">
-            <Sparkles className="w-3 h-3" />
-            <span className="font-semibold">挑战任务</span>
-          </div>
-          <p className="text-white/85 text-sm leading-relaxed pl-2">{event.task}</p>
-        </div>
-      )}
+      <OpportunityBrief event={event} accepted={opportunityAccepted} hasFollowUp={Boolean(currentFollowUpTask)} />
 
       {/* Follow-up task card */}
       {opportunityAccepted && currentFollowUpTask && (
@@ -1002,14 +1121,48 @@ function OpportunityEventCard({ event }: { event: OpportunityCard }) {
         )}
       </div>
     </div>
+    {opportunityAccepted && currentFollowUpTask && (
+      <FollowUpActionPanel onOpenAiAid={onOpenAiAid} />
+    )}
+    </>
   );
+}
+
+function OpportunityBrief({
+  event,
+  accepted,
+  hasFollowUp,
+}: {
+  event: OpportunityCard;
+  accepted: boolean;
+  hasFollowUp: boolean;
+}) {
+  const intro = buildOpportunityIntro(event.title);
+
+  return (
+    <div className="space-y-3">
+      <MissionInfo
+        tone="opportunity"
+        conclusion={intro}
+        background={event.description}
+        objective={!accepted || hasFollowUp ? undefined : event.task}
+        objectiveLabel="当前要做"
+      />
+
+    </div>
+  );
+}
+
+function buildOpportunityIntro(title: string) {
+  if (/补贴|政策|政府/.test(title)) return "你获得了一个补贴申请机会。";
+  if (/合作|资源|联盟/.test(title)) return "你获得了一个外部合作机会。";
+  if (/客流|口碑|曝光|社区/.test(title)) return "你获得了一个扩大影响的机会。";
+  return "你遇到了一个新的经营机会。";
 }
 
 /** Follow-up task card - displayed after accepting an opportunity with followUpTask */
 function FollowUpTaskCard() {
   const currentFollowUpTask = useGameStore((s) => s.currentFollowUpTask);
-  const currentFollowUpData = useGameStore((s) => s.currentFollowUpData);
-  const [dataOpen, setDataOpen] = useState(false);
 
   if (!currentFollowUpTask) return null;
 
@@ -1034,9 +1187,9 @@ function FollowUpTaskCard() {
 
       <div className="flex items-center gap-2 relative">
         <FileSearch className="w-5 h-5 text-cyan-400 animate-icon-pulse" />
-        <h3 className="text-lg font-bold text-cyan-400">后续任务</h3>
+        <h3 className="text-lg font-bold text-cyan-400">当前要做</h3>
         <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 ml-auto">
-          📋 跟进
+          📋 执行
         </span>
       </div>
 
@@ -1044,34 +1197,88 @@ function FollowUpTaskCard() {
         {currentFollowUpTask}
       </p>
 
-      {/* Expandable follow-up data */}
-      {currentFollowUpData && (
-        <div className="rounded-lg overflow-hidden relative" style={{ background: "rgba(10, 14, 26, 0.4)", border: "1px solid rgba(6, 182, 212, 0.1)" }}>
-          <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg"
-            style={{ background: "linear-gradient(180deg, #06b6d4, #10b981)" }}
-          />
-          <div
-            onClick={() => setDataOpen(!dataOpen)}
-            className="w-full flex items-center justify-between pl-4 pr-3 py-2.5 text-xs hover:bg-white/5 transition-colors cursor-pointer"
+    </div>
+  );
+}
+
+function FollowUpActionPanel({ onOpenAiAid }: { onOpenAiAid?: () => void }) {
+  const currentFollowUpData = useGameStore((s) => s.currentFollowUpData);
+  const [dataOpen, setDataOpen] = useState(false);
+
+  return (
+    <div
+      className="rounded-3xl p-3.5 sm:p-4 animate-task-card-enter"
+      style={{
+        animationDelay: "180ms",
+        background: "linear-gradient(135deg, rgba(6, 182, 212, 0.055), rgba(139, 92, 246, 0.045))",
+        border: "1px solid rgba(6, 182, 212, 0.14)",
+      }}
+    >
+      <div className="mb-3">
+        <SectionLabel icon={Bot}>操作区</SectionLabel>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+        {currentFollowUpData && (
+          <button
+            onClick={() => setDataOpen(true)}
+            className="rounded-xl px-3 py-2.5 text-left bg-cyan-400/[0.055] border border-cyan-300/12"
           >
-            <div className="flex items-center gap-1.5 text-cyan-400">
-              <FileSearch className="w-3 h-3" />
-              <span className="font-medium">参考数据</span>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-cyan-200">
+              <FileSearch className="w-3.5 h-3.5" />
+              打开资料
             </div>
-            <div className="flex items-center gap-1">
-              <CopyButton text={currentFollowUpData} className="mr-1" />
-              {dataOpen ? (
-                <ChevronUp className="w-3 h-3 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="w-3 h-3 text-muted-foreground" />
-              )}
+            <div className="mt-0.5 text-[10px] text-white/34">参考资料</div>
+          </button>
+        )}
+        <button
+          onClick={onOpenAiAid}
+          className="lg:hidden rounded-xl px-3 py-2.5 text-left bg-violet-400/[0.06] border border-violet-300/12"
+        >
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-200">
+            <Bot className="w-3.5 h-3.5" />
+            呼叫外援
+          </div>
+          <div className="mt-0.5 text-[10px] text-white/34">追问、推演方案</div>
+        </button>
+      </div>
+      {currentFollowUpData && dataOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: "rgba(10, 14, 26, 0.72)", backdropFilter: "blur(8px)" }}
+          onClick={() => setDataOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-xl max-h-[82vh] overflow-hidden rounded-t-3xl sm:rounded-2xl"
+            style={{
+              background: "linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(18, 14, 40, 0.98))",
+              border: "1px solid rgba(6, 182, 212, 0.22)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.48)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-13 px-4 py-3 flex items-center justify-between border-b border-white/10">
+              <div className="text-sm font-bold text-white">任务资料</div>
+              <button
+                onClick={() => setDataOpen(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="border-b border-white/10 px-4 pt-3 pb-2">
+              <div className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-cyan-100 bg-cyan-400/12 border border-cyan-300/20">
+                <FileSearch className="w-3.5 h-3.5" />
+                参考资料
+              </div>
+            </div>
+            <div className="max-h-[calc(82vh-7.5rem)] overflow-y-auto custom-scrollbar p-4">
+              <div className="rounded-xl p-3 bg-white/[0.035] border border-white/8">
+                <p className="text-sm leading-relaxed text-white/72 whitespace-pre-wrap">
+                  {currentFollowUpData}
+                </p>
+              </div>
             </div>
           </div>
-          {dataOpen && (
-            <div className="pl-4 pr-3 pb-3 text-white/70 text-sm leading-relaxed whitespace-pre-wrap animate-expand">
-              {currentFollowUpData}
-            </div>
-          )}
         </div>
       )}
     </div>

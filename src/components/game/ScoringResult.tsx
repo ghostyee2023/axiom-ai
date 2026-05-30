@@ -21,6 +21,11 @@ const dimensionColors: Record<string, string> = {
   信息完整: "#06b6d4",
   迭代深度: "#10b981",
   逻辑严谨: "#f59e0b",
+  目标定义: "#8b5cf6",
+  业务理解: "#06b6d4",
+  约束表达: "#ef4444",
+  追问迭代: "#10b981",
+  落地验证: "#f59e0b",
 };
 
 function getDimColor(name: string): string {
@@ -61,6 +66,9 @@ export default function ScoringResult() {
   const latestRevenue = revenueHistory.length > 0 ? revenueHistory[revenueHistory.length - 1] : null;
   const recentImpact = numericChangeLog.slice(-4).reverse();
   const coachComment = parseCoachComment(currentScore.comment || "");
+  const settlementMood = selectedDecisionOption
+    ? buildSettlementMood(selectedDecisionOption.consequence, latestRevenue?.revenue || 0)
+    : "";
 
   return (
     <div className="game-card rounded-2xl p-3 sm:p-5 space-y-3 sm:space-y-5 animate-fade-in-up">
@@ -169,6 +177,11 @@ export default function ScoringResult() {
             <Sparkles className="w-3.5 h-3.5 text-violet-300" />
             <span className="text-sm font-semibold text-violet-200">本回合结论</span>
           </div>
+          {settlementMood && (
+            <p className="mb-2 text-[13px] font-bold text-cyan-100 leading-relaxed">
+              {settlementMood}
+            </p>
+          )}
           <p className="text-sm font-bold text-white/84 leading-relaxed">
             你选择了「{selectedDecisionOption.title}」，这会改变下一关的经营前提。
           </p>
@@ -194,12 +207,22 @@ export default function ScoringResult() {
               >
                 <TrendingUp className={`w-4 h-4 ${latestRevenue.revenue >= 0 ? "text-emerald-400" : "text-red-400"}`} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-xs text-white/50 font-medium">本回合营收</span>
-                <p className="text-xs text-white/30 mt-0.5">{latestRevenue.reason}</p>
+                <p
+                  className="text-xs text-white/30 mt-0.5 leading-relaxed"
+                  style={{
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {latestRevenue.reason}
+                </p>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right shrink-0 pl-3">
               <span className={`text-xl font-black ${latestRevenue.revenue >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                 {latestRevenue.revenue >= 0 ? "+" : ""}¥{latestRevenue.revenue.toLocaleString()}
               </span>
@@ -220,7 +243,7 @@ export default function ScoringResult() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             {recentImpact.map((change) => (
               <div key={change.id} className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 bg-white/[0.035] border border-white/7">
-                <span className="text-xs text-white/55 truncate">{change.label}</span>
+                <span className="text-xs text-white/55 truncate">{formatChangeLabel(change.label)}</span>
                 <span className={`text-xs font-bold tabular-nums ${change.delta >= 0 ? "text-emerald-300" : "text-red-300"}`}>
                   {change.delta > 0 ? "+" : ""}{change.delta.toLocaleString()}
                 </span>
@@ -337,6 +360,34 @@ function parseCoachComment(comment: string) {
     excellent: excellentMatch?.[1]?.trim() || "本轮已经完成有效表达。",
     improvement: improvementMatch?.[1]?.trim() || "下一轮可以进一步明确约束、步骤和验证方式。",
   };
+}
+
+function formatChangeLabel(label: string) {
+  const labels: Record<string, string> = {
+    "总分": "决策力",
+    riskAppetite: "风险偏好",
+    dataDependency: "数据意识",
+    collaborationTendency: "协作倾向",
+    innovationLevel: "创新倾向",
+  };
+  return labels[label] || label;
+}
+
+function buildSettlementMood(consequence: string, revenue: number) {
+  const text = consequence || "";
+  if (/现金|资金|成本|支出|投入|亏|压力/.test(text) || revenue < 0) {
+    return "糟糕，现金流开始绷紧了。你赢得了推进机会，也把后续压力推高了一截。";
+  }
+  if (/增长|客流|收入|营收|省|回报|赚钱/.test(text) || revenue > 1200) {
+    return "太好了，局面开始松动。这个选择让经营结果有了更明显的回响。";
+  }
+  if (/合作|关系|顾客|社区|供应商|家人/.test(text)) {
+    return "事情变得微妙了。关系资源开始发挥作用，但承诺也会跟着变重。";
+  }
+  if (/风险|试运行|验证|复盘|数据/.test(text)) {
+    return "你把不确定性拆小了。接下来，真实反馈会决定这条路能走多远。";
+  }
+  return "新的局面被打开了。下一关会接住这次选择带来的连锁反应。";
 }
 
 function CoachNoteBlock({

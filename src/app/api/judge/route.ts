@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           "逻辑严谨": 5,
         },
         total: 25,
-        comment: "优秀：你已经完成了一次可结算的决策表达，系统先按基础分记录本轮结果。\n\n待改进：这次 AI 评分返回格式不完整，建议补一句更明确的行动方案后再提交。",
+        comment: "优秀：你已经完成一次可结算的决策表达，本轮结果已按基础标准记录。\n\n待改进：下一次可以把目标、约束、行动步骤和验证指标说得更清楚。",
       };
     }
 
@@ -134,11 +134,11 @@ function normalizeJudgeResult(result: Record<string, unknown>) {
     ? result.scores as Record<string, number>
     : {};
   const normalizedScores = {
-    "角色设定": clampScore(Number(scores["角色设定"] ?? 5)),
-    "约束清晰": clampScore(Number(scores["约束清晰"] ?? 5)),
-    "信息完整": clampScore(Number(scores["信息完整"] ?? 5)),
-    "迭代深度": clampScore(Number(scores["迭代深度"] ?? 5)),
-    "逻辑严谨": clampScore(Number(scores["逻辑严谨"] ?? 5)),
+    "目标定义": clampScore(Number(scores["目标定义"] ?? scores["角色设定"] ?? 5)),
+    "业务理解": clampScore(Number(scores["业务理解"] ?? scores["信息完整"] ?? 5)),
+    "约束表达": clampScore(Number(scores["约束表达"] ?? scores["约束清晰"] ?? 5)),
+    "追问迭代": clampScore(Number(scores["追问迭代"] ?? scores["迭代深度"] ?? 5)),
+    "落地验证": clampScore(Number(scores["落地验证"] ?? scores["逻辑严谨"] ?? 5)),
   };
   const total = Object.values(normalizedScores).reduce((sum, value) => sum + value, 0);
   const comment = String(result.comment || "").trim();

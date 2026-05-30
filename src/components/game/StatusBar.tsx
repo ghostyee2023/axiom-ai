@@ -2,7 +2,7 @@
 
 import { useGameStore } from "@/store/gameStore";
 import { scenarioData } from "@/data/scenario";
-import { Coins, Package, Trophy, MapPin, TrendingUp, History, X } from "lucide-react";
+import { Coins, Package, Trophy, MapPin, TrendingUp, History, X, Zap } from "lucide-react";
 import { useState } from "react";
 import type { NumericChangeType } from "@/store/gameStore";
 
@@ -23,6 +23,11 @@ export default function StatusBar() {
   const currentStepIndex = useGameStore((s) => s.currentStepIndex);
   const selectedRole = useGameStore((s) => s.selectedRole);
   const numericChangeLog = useGameStore((s) => s.numericChangeLog);
+  const activateInventoryItem = useGameStore((s) => s.useItem);
+  const subPhase = useGameStore((s) => s.subPhase);
+  const skipNextCrisis = useGameStore((s) => s.skipNextCrisis);
+  const expertRoleActive = useGameStore((s) => s.expertRoleActive);
+  const doubleDiceActive = useGameStore((s) => s.doubleDiceActive);
 
   const route = getCurrentRoute(selectedRole?.id || null);
 
@@ -138,7 +143,7 @@ export default function StatusBar() {
         >
           <Coins className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500" />
           <span className="text-yellow-400 font-bold text-xs sm:text-sm tabular-nums">{decisionCoins}</span>
-          <span className="text-yellow-500/60 text-[9px] hidden sm:inline">币</span>
+          <span className="text-yellow-500/60 text-[9px] hidden sm:inline">决策币</span>
         </button>
 
         {/* Items */}
@@ -155,6 +160,7 @@ export default function StatusBar() {
           <span className="text-emerald-300 font-bold text-xs sm:text-sm tabular-nums">
             {inventory.reduce((sum, i) => sum + i.quantity, 0)}
           </span>
+          <span className="text-emerald-400/60 text-[9px] hidden sm:inline">道具</span>
         </button>
 
         {/* Revenue */}
@@ -173,6 +179,7 @@ export default function StatusBar() {
           <span className={`font-bold text-xs sm:text-sm tabular-nums ${revenue >= 0 ? "text-emerald-300" : "text-red-300"}`}>
             ¥{revenue >= 0 ? revenue.toLocaleString() : revenue.toLocaleString()}
           </span>
+          <span className={`text-[9px] hidden sm:inline ${revenue >= 0 ? "text-emerald-400/60" : "text-red-400/60"}`}>营收</span>
         </button>
 
         {/* Inventory Items Detail - desktop only */}
@@ -268,9 +275,15 @@ export default function StatusBar() {
                 <div className="text-[10px] text-white/35 mb-1">当前道具</div>
                 <div className="flex flex-wrap gap-1">
                   {inventory.map((item) => (
-                    <span key={item.shopItem.id} className="px-1.5 py-0.5 rounded-md text-[10px] bg-emerald-400/10 text-emerald-200 border border-emerald-400/15">
-                      {item.shopItem.name} x{item.quantity}
-                    </span>
+                    <InventoryUseRow
+                      key={item.shopItem.id}
+                      item={item}
+                      subPhase={subPhase}
+                      skipNextCrisis={skipNextCrisis}
+                      expertRoleActive={expertRoleActive}
+                      doubleDiceActive={doubleDiceActive}
+                      onUse={() => activateInventoryItem(item.shopItem.id)}
+                    />
                   ))}
                 </div>
               </div>
@@ -316,6 +329,110 @@ export default function StatusBar() {
       )}
     </div>
   );
+}
+
+type InventoryItem = ReturnType<typeof useGameStore.getState>["inventory"][number];
+
+function InventoryUseRow({
+  item,
+  subPhase,
+  skipNextCrisis,
+  expertRoleActive,
+  doubleDiceActive,
+  onUse,
+}: {
+  item: InventoryItem;
+  subPhase: string;
+  skipNextCrisis: boolean;
+  expertRoleActive: boolean;
+  doubleDiceActive: boolean;
+  onUse: () => void;
+}) {
+  const state = getInventoryUseState(item.shopItem.effect, {
+    subPhase,
+    skipNextCrisis,
+    expertRoleActive,
+    doubleDiceActive,
+  });
+
+  return (
+    <div className="w-full rounded-lg px-2.5 py-2 bg-emerald-400/[0.07] border border-emerald-400/14">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold text-emerald-100">
+            {item.shopItem.name} x{item.quantity}
+          </div>
+          <div className="mt-0.5 text-[10px] leading-relaxed text-white/38">
+            {state.hint}
+          </div>
+        </div>
+        {state.showButton && (
+          <button
+            onClick={onUse}
+            disabled={!state.enabled}
+            className="shrink-0 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold disabled:opacity-35 disabled:cursor-not-allowed"
+            style={{
+              color: state.enabled ? "#67e8f9" : "rgba(255,255,255,0.35)",
+              background: state.enabled ? "rgba(6, 182, 212, 0.10)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${state.enabled ? "rgba(6, 182, 212, 0.22)" : "rgba(255,255,255,0.08)"}`,
+            }}
+          >
+            <Zap className="w-3 h-3" />
+            使用
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function getInventoryUseState(
+  effect: string,
+  state: {
+    subPhase: string;
+    skipNextCrisis: boolean;
+    expertRoleActive: boolean;
+    doubleDiceActive: boolean;
+  }
+) {
+  if (effect === "reroll_dice") {
+    return {
+      showButton: false,
+      enabled: false,
+      hint: state.subPhase === "crisis" ? "危机骰子区可使用，用于重掷一次。" : "留到危机骰子结果不理想时使用。",
+    };
+  }
+  if (effect === "skip_next_crisis") {
+    return {
+      showButton: true,
+      enabled: !state.skipNextCrisis && state.subPhase !== "crisis",
+      hint: state.skipNextCrisis ? "已生效：下一次危机会被跳过。" : "提前使用，跳过下一次危机事件。",
+    };
+  }
+  if (effect === "boost_score") {
+    return {
+      showButton: true,
+      enabled: !state.expertRoleActive && state.subPhase === "task",
+      hint: state.expertRoleActive ? "已生效：本关 AI 使用专家视角。" : "在主线任务中使用，让 AI 获得专家视角并提高评分。",
+    };
+  }
+  if (effect === "double_dice") {
+    return {
+      showButton: true,
+      enabled: !state.doubleDiceActive,
+      hint: state.doubleDiceActive ? "已生效：下次危机掷两个骰子取更好结果。" : "提前使用，让下一次危机掷骰更稳。",
+    };
+  }
+  return {
+    showButton: false,
+    enabled: false,
+    hint: itemEffectLabel(effect),
+  };
+}
+
+function itemEffectLabel(effect: string) {
+  if (effect === "special") return "特殊道具，会在后续剧情或结算中体现。";
+  return "当前道具暂不需要主动使用。";
 }
 
 function SectionHeader({

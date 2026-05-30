@@ -42,6 +42,14 @@ export default function ShopDialog() {
     return itemAccentColors[effect] || "#8b5cf6";
   }
 
+  function getItemGameUse(item: ShopItem) {
+    if (item.effect === "reroll_dice") return "危机补救：掷骰不理想时重试一次";
+    if (item.effect === "skip_next_crisis") return "风险缓冲：跳过下一次危机事件";
+    if (item.effect === "boost_score") return "AI 加成：下一关获得专家视角和评分加成";
+    if (item.effect === "double_dice") return "概率增益：下次危机掷两个骰子取更好结果";
+    return "特殊资源：后续剧情或结算中生效";
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-2 sm:p-4">
       <div className="game-card rounded-2xl p-3 sm:p-5 max-w-md w-full space-y-3 sm:space-y-4 animate-fade-in-up max-h-[92vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -70,6 +78,9 @@ export default function ShopDialog() {
           <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
           <span className="text-xs sm:text-sm text-white/50">当前决策币</span>
           <span className="text-xl sm:text-2xl font-black gradient-text-gold">{decisionCoins}</span>
+        </div>
+        <div className="rounded-xl px-3 py-2 text-xs leading-relaxed text-white/45 bg-white/[0.035] border border-white/8">
+          决策币用于换取容错：购买后进入道具记录，需要时再使用，让危机、AI 专家视角或概率结果更可控。
         </div>
 
         {/* Items as collectible cards */}
@@ -126,6 +137,16 @@ export default function ShopDialog() {
                     <p className="text-xs text-white/50 leading-relaxed pl-9">
                       {item.description}
                     </p>
+                    <div
+                      className="mt-2 ml-9 inline-flex rounded-md px-2 py-1 text-[10px] font-semibold"
+                      style={{
+                        color: accent,
+                        background: `${accent}12`,
+                        border: `1px solid ${accent}24`,
+                      }}
+                    >
+                      {getItemGameUse(item)}
+                    </div>
                     {owned && !fullyOwned && (
                       <span className="text-xs text-cyan-400/80 mt-1 inline-block pl-9">
                         已拥有 ×{owned.quantity} / {item.limit}

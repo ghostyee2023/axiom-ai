@@ -92,6 +92,7 @@ function parseMarkdownToSlides(markdown: string): Slide[] {
       content = trimmed;
     }
 
+    content = summarizeSlideContent(content);
     const meta = getSectionMeta(title);
 
     slides.push({
@@ -115,6 +116,42 @@ function parseMarkdownToSlides(markdown: string): Slide[] {
   }
 
   return slides;
+}
+
+function summarizeSlideContent(content: string) {
+  const lines = content
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[-*]\s+/, "- ").replace(/^\d+[.)、]\s+/, "- "));
+
+  const bullets = lines
+    .filter((line) => line.startsWith("- "))
+    .slice(0, 4)
+    .map((line) => (line.length > 42 ? `${line.slice(0, 42)}...` : line));
+
+  const lead = lines.find((line) => !line.startsWith("- ") && !line.startsWith("##"));
+  const compactLead = lead
+    ? (lead.length > 52 ? `${lead.slice(0, 52)}...` : lead)
+    : "";
+
+  if (bullets.length > 0) {
+    return [compactLead, ...bullets].filter(Boolean).join("\n\n");
+  }
+
+  const sentences = content
+    .replace(/\n+/g, " ")
+    .split(/[。！？.!?]/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+
+  return sentences
+    .map((sentence, index) => {
+      const text = sentence.length > 42 ? `${sentence.slice(0, 42)}...` : sentence;
+      return index === 0 ? text : `- ${text}`;
+    })
+    .join("\n\n");
 }
 
 // ===== Key Insight Detection =====
@@ -323,6 +360,7 @@ function createSlideMarkdownComponents(accentColor: string) {
 export default function ReviewPanel() {
   const reviewReport = useGameStore((s) => s.reviewReport);
   const isReviewLoading = useGameStore((s) => s.isReviewLoading);
+  const generateReview = useGameStore((s) => s.generateReview);
   const currentTask = useGameStore((s) => s.currentTask);
 
   const [viewMode, setViewMode] = useState<"report" | "slides">("report");
@@ -337,12 +375,13 @@ export default function ReviewPanel() {
     currentTask?.type === "checkpoint" &&
     "checkpoint" in currentTask &&
     (currentTask as { checkpoint: { isFinal?: boolean } }).checkpoint?.isFinal === true;
+  const isReviewError = Boolean(reviewReport && /报告生成失败|最终报告生成失败/.test(reviewReport));
 
   // Parse slides from the report
   const slides = useMemo(() => {
-    if (!reviewReport) return [];
+    if (!reviewReport || isReviewError) return [];
     return parseMarkdownToSlides(reviewReport);
-  }, [reviewReport]);
+  }, [reviewReport, isReviewError]);
 
   // Clamp slide index when slides change (derive during render, no setState in effect)
   const safeSlideIndex = slides.length > 0 ? Math.min(currentSlideIndex, slides.length - 1) : 0;
@@ -449,7 +488,7 @@ export default function ReviewPanel() {
             </div>
           )}
           {/* Toggle View Mode Button */}
-          {reviewReport && !isReviewLoading && (
+          {reviewReport && !isReviewLoading && !isReviewError && (
             <button
               onClick={() => {
                 setViewMode(viewMode === "report" ? "slides" : "report");
@@ -504,14 +543,14 @@ export default function ReviewPanel() {
               </div>
             </div>
             <p className="text-white/70 text-xs sm:text-sm font-medium mb-2">AI 正在分析你的决策历程...</p>
-            <p className="text-[11px] sm:text-xs text-white/30">这可能需要 10-20 秒，请耐心等待</p>
+            <p className="text-[11px] sm:text-xs text-white/30">这可能需要 10-20 秒；复盘不会影响继续游戏</p>
             <div className="mt-6 flex items-center gap-1">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400 thinking-dot" />
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400 thinking-dot" />
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400 thinking-dot" />
             </div>
           </div>
-        ) : reviewReport ? (
+        ) : reviewReport && !isReviewError ? (
           viewMode === "report" ? (
             // Report (markdown) mode
             <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2 sm:px-4 sm:py-3">
@@ -797,7 +836,18 @@ export default function ReviewPanel() {
               <AlertCircle className="w-6 h-6 text-red-400" />
             </div>
             <p className="text-white/50 text-sm">报告生成失败</p>
-            <p className="text-xs text-white/30 mt-1">请稍后再试</p>
+            <p className="text-xs text-white/30 mt-1">可以重新生成，或直接继续下一关</p>
+            <button
+              onClick={generateReview}
+              disabled={isReviewLoading}
+              className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-45 disabled:cursor-not-allowed"
+              style={{
+                background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+              }}
+            >
+              {isReviewLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              重新生成复盘
+            </button>
           </div>
         )}
       </div>

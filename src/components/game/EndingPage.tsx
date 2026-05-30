@@ -214,16 +214,104 @@ function GlassCard({
 // Extract decision style label from the final report
 function extractDecisionStyle(report: string | null): { label: string; reason: string } {
   if (!report) return { label: "分析中...", reason: "" };
-  const styleSection = report.match(/##\s*🏷️\s*决策风格标签([\s\S]*?)$/);
+  const styleSection = report.match(/##\s*🏷️?\s*决策风格标签([\s\S]*?)(?=\n##\s|$)/);
   if (styleSection) {
     const text = styleSection[1].trim();
-    const lines = text.split("\n").filter((l) => l.trim());
-    const labelMatch = text.match(/[""「」]([^""「」]{2,8})[""「」]/);
-    const label = labelMatch ? labelMatch[1] : lines[0]?.slice(0, 8) || "综合型";
-    const reason = lines.slice(1).join(" ").trim().slice(0, 100);
+    const lines = text
+      .split("\n")
+      .map((line) => cleanReportLine(line))
+      .filter(Boolean);
+    const labelLine = lines.find((line) => /称号|标签|风格/.test(line)) || lines[0] || "";
+    const quotedLabel = labelLine.match(/[「『《“"]([^」』》”"]{2,12})[」』》”"]/);
+    const colonLabel = labelLine.match(/(?:称号|标签|风格)\s*[:：]\s*([^，。；\n]{2,12})/);
+    const plainLabel = labelLine
+      .replace(/^(称号|标签|风格)\s*[:：]\s*/, "")
+      .replace(/[，。；：:]/g, "")
+      .trim();
+    const label = sanitizeStyleLabel(
+      quotedLabel?.[1] || colonLabel?.[1] || plainLabel || "综合型"
+    );
+    const reasonLine = lines.find((line) => /说明|理由|原因/.test(line));
+    const reasonSource = reasonLine
+      ? reasonLine.replace(/^(说明|理由|原因)\s*[:：]\s*/, "")
+      : lines.filter((line) => line !== labelLine).join(" ");
+    const reason = cleanReportLine(reasonSource).slice(0, 100);
     return { label, reason };
   }
   return { label: "决策达人", reason: "" };
+}
+
+function cleanReportLine(line: string) {
+  return line
+    .replace(/^[-*]\s*/, "")
+    .replace(/\*\*/g, "")
+    .replace(/`/g, "")
+    .replace(/#+\s*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function sanitizeStyleLabel(label: string) {
+  const cleaned = cleanReportLine(label)
+    .replace(/^(称号|标签|风格)\s*[:：]\s*/, "")
+    .replace(/[「」『』《》“”"]/g, "")
+    .replace(/[，。；：:]/g, "")
+    .trim();
+  return cleaned.slice(0, 8) || "综合型";
+}
+
+function buildFinalReportSummary(report: string | null) {
+  if (!report) return [];
+  const cleaned = sanitizeFinalReport(report);
+  const wanted = [
+    { key: "journey", title: "决策旅程", match: /决策旅程|决策回顾|回顾/ },
+    { key: "mode", title: "决策模式", match: /决策模式|风格标签|决策风格/ },
+    { key: "reflection", title: "AI 协作提醒", match: /AI提问|提问反思|AI协作|进阶建议/ },
+  ];
+
+  return wanted
+    .map((wantedItem) => {
+      const section = extractReportSection(cleaned, wantedItem.match);
+      if (!section) return null;
+      const text = summarizeReportSection(section);
+      if (!text) return null;
+      return { title: wantedItem.title, text };
+    })
+    .filter(Boolean) as { title: string; text: string }[];
+}
+
+function extractReportSection(report: string, headingPattern: RegExp) {
+  const sections = report.split(/(?=^##\s+)/m);
+  const section = sections.find((part) => {
+    const firstLine = part.split("\n")[0] || "";
+    return headingPattern.test(firstLine);
+  });
+  return section
+    ?.replace(/^##\s*[^\n]+\n?/, "")
+    .trim();
+}
+
+function summarizeReportSection(section: string) {
+  const lines = section
+    .split("\n")
+    .map((line) => cleanReportLine(line))
+    .filter(Boolean)
+    .filter((line) => !/^好的|这是|以下是/.test(line));
+  const conclusion = lines.find((line) => /^结论[:：]/.test(line)) || lines.find((line) => !/^[-•]/.test(line)) || lines[0] || "";
+  const bullets = lines
+    .filter((line) => line !== conclusion)
+    .slice(0, 2);
+  return [conclusion.replace(/^结论[:：]\s*/, ""), ...bullets]
+    .join("；")
+    .replace(/\s+/g, " ")
+    .slice(0, 120);
+}
+
+function sanitizeFinalReport(report: string) {
+  return report
+    .replace(/^好的[，,。\s]*这是.*?报告[。！!]?/m, "")
+    .replace(/总分\s*[:：]?\s*([0-9.]+)\s*\/\s*(100|400)/g, "总分：$1")
+    .trim();
 }
 
 export default function EndingPage() {
@@ -287,6 +375,7 @@ export default function EndingPage() {
   const isProfitable = revenue >= 0;
   const totalRevenueIncome = revenueHistory.filter(r => r.revenue > 0).reduce((sum, r) => sum + r.revenue, 0);
   const totalRevenueLoss = revenueHistory.filter(r => r.revenue < 0).reduce((sum, r) => sum + Math.abs(r.revenue), 0);
+  const finalReportSummary = buildFinalReportSummary(finalReport);
 
   return (
     <div className="min-h-screen game-bg relative overflow-y-auto custom-scrollbar">
@@ -622,14 +711,14 @@ export default function EndingPage() {
           </div>
         </StaggerItem>
 
-        {/* ===== AI Review Report ===== */}
+        {/* ===== AI Review Summary ===== */}
         <StaggerItem index={8}>
           <GlassCard accentColor="violet" className="p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-7 h-7 rounded-lg bg-violet-500/15 flex items-center justify-center">
                 <BookOpen className="w-4 h-4 text-violet-400" />
               </div>
-              <span className="text-sm font-bold text-violet-300">AI 复盘报告</span>
+              <span className="text-sm font-bold text-violet-300">AI 复盘摘要</span>
               {isFinalReportLoading && (
                 <div className="flex items-center gap-1.5 ml-auto">
                   <Loader2 className="w-3.5 h-3.5 text-violet-400 animate-spin" />
@@ -656,9 +745,25 @@ export default function EndingPage() {
                   <div className="w-1.5 h-1.5 rounded-full bg-violet-400 thinking-dot" />
                 </div>
               </div>
+            ) : finalReportSummary.length > 0 ? (
+              <div className="space-y-2">
+                {finalReportSummary.map((item, index) => (
+                  <div
+                    key={`${item.title}-${index}`}
+                    className="rounded-xl px-3 py-2.5"
+                    style={{
+                      background: "rgba(139, 92, 246, 0.06)",
+                      border: "1px solid rgba(139, 92, 246, 0.12)",
+                    }}
+                  >
+                    <div className="text-xs font-bold text-violet-200">{item.title}</div>
+                    <div className="mt-1 text-sm leading-relaxed text-white/62">{item.text}</div>
+                  </div>
+                ))}
+              </div>
             ) : finalReport ? (
-              <div className="chat-markdown">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{finalReport}</ReactMarkdown>
+              <div className="chat-markdown text-sm">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{sanitizeFinalReport(finalReport)}</ReactMarkdown>
               </div>
             ) : (
               <div className="text-center py-8 text-white/30 text-sm">

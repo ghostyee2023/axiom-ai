@@ -20,6 +20,7 @@ export default function DecisionPanel() {
   const opportunityAccepted = useGameStore((s) => s.opportunityAccepted);
   const finalAnswer = useGameStore((s) => s.finalAnswer);
   const isJudging = useGameStore((s) => s.isJudging);
+  const judgeError = useGameStore((s) => s.judgeError);
   const isChatLoading = useGameStore((s) => s.isChatLoading);
   const chatMessages = useGameStore((s) => s.chatMessages);
   const setFinalAnswer = useGameStore((s) => s.setFinalAnswer);
@@ -34,6 +35,13 @@ export default function DecisionPanel() {
     (subPhase === "opportunity" && opportunityAccepted);
 
   const isCrisisAndNotRolled = subPhase === "crisis" && !diceRolled;
+  const disabledReason = isCrisisAndNotRolled
+    ? "先掷骰子，接受危机结果后再处理。"
+    : chatMessages.length === 0
+      ? "先和 AI 外援对话，让它帮你形成可执行方案。"
+      : isChatLoading
+        ? "AI 正在回复，等它输出后再提交。"
+        : "";
 
   const handleSubmitDecision = () => {
     if (isJudging || isChatLoading || chatMessages.length === 0 || isCrisisAndNotRolled) return;
@@ -92,9 +100,9 @@ export default function DecisionPanel() {
       {/* Mobile: compact inline textarea */}
       <div className="sm:hidden px-3 pb-2">
         <textarea
-          value={finalAnswer}
-          onChange={(e) => setFinalAnswer(e.target.value)}
-          placeholder="决策结论（可选）..."
+            value={finalAnswer}
+            onChange={(e) => setFinalAnswer(e.target.value)}
+            placeholder="写下你的决策结论：目标、动作、验证方式..."
           rows={2}
           className="w-full rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none resize-none min-h-[44px] max-h-[80px] overflow-y-auto custom-scrollbar transition-all duration-300"
           style={{
@@ -116,7 +124,7 @@ export default function DecisionPanel() {
           <textarea
             value={finalAnswer}
             onChange={(e) => setFinalAnswer(e.target.value)}
-            placeholder="总结你的决策结论，提炼对话中的关键产出..."
+            placeholder="总结你的决策结论：要解决什么、准备怎么做、用什么指标判断有效..."
             rows={3}
             className="w-full rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none resize-y min-h-[60px] max-h-[200px] overflow-y-auto custom-scrollbar transition-all duration-300"
             style={{
@@ -147,6 +155,22 @@ export default function DecisionPanel() {
 
       {/* Submit Button */}
       <div className="px-2.5 py-2 sm:px-3.5 sm:pb-3 sm:pt-0.5">
+        {judgeError && (
+          <div
+            className="mb-2 rounded-lg px-3 py-2 text-xs leading-relaxed text-amber-100"
+            style={{
+              background: "rgba(245, 158, 11, 0.1)",
+              border: "1px solid rgba(245, 158, 11, 0.22)",
+            }}
+          >
+            {judgeError}
+          </div>
+        )}
+        {!judgeError && disabledReason && !isJudging && (
+          <div className="mb-2 text-center text-[11px] leading-relaxed text-white/38">
+            {disabledReason}
+          </div>
+        )}
         <button
           onClick={handleSubmitDecision}
           disabled={
