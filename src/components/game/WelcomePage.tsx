@@ -1,6 +1,7 @@
 "use client";
 
 import { scenarioData } from "@/data/scenario";
+import { APP_VERSION } from "@/lib/version";
 import { useGameStore } from "@/store/gameStore";
 import {
   X,
@@ -279,6 +280,10 @@ export default function WelcomePage() {
           </div>
         </div>
       )}
+
+      <div className="fixed bottom-2 right-3 z-10 text-[10px] tracking-wide text-white/35">
+        Version {APP_VERSION}
+      </div>
     </div>
   );
 }
