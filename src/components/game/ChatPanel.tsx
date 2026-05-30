@@ -1,6 +1,7 @@
 "use client";
 
 import { useGameStore } from "@/store/gameStore";
+import type { ContractData } from "@/data/scenario";
 import {
   Send,
   Loader2,
@@ -8,23 +9,41 @@ import {
   Check,
   Bot,
   MessageCircle,
+  RotateCcw,
+  Clock,
+  FileSearch,
+  ScrollText,
+  Lightbulb,
+  Lock,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-export default function ChatPanel() {
+export default function ChatPanel({
+  hideHeader = false,
+  onOpenTaskIntel,
+}: {
+  hideHeader?: boolean;
+  onOpenTaskIntel?: () => void;
+}) {
   const chatMessages = useGameStore((s) => s.chatMessages);
   const sendChatMessage = useGameStore((s) => s.sendChatMessage);
   const isChatLoading = useGameStore((s) => s.isChatLoading);
+  const chatWaitStage = useGameStore((s) => s.chatWaitStage);
+  const retryLastChatMessage = useGameStore((s) => s.retryLastChatMessage);
   const subPhase = useGameStore((s) => s.subPhase);
   const diceRolled = useGameStore((s) => s.diceRolled);
+  const currentTask = useGameStore((s) => s.currentTask);
+  const unlockedHints = useGameStore((s) => s.unlockedHints);
+  const unlockedHiddenData = useGameStore((s) => s.unlockedHiddenData);
 
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isCrisisAndNotRolled = subPhase === "crisis" && !diceRolled;
+  const quickRefs = buildQuickReferences(currentTask, unlockedHints, unlockedHiddenData);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -51,6 +70,20 @@ export default function ChatPanel() {
     setInput(e.target.value);
   };
 
+  const appendReference = (ref: QuickReference) => {
+    setInput((current) => {
+      const prefix = current.trim() ? `${current.trim()}\n\n` : "";
+      return `${prefix}【引用${ref.label}】\n${ref.content}\n\n请基于以上信息继续帮我分析。`;
+    });
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      }
+    });
+  };
+
   return (
     <div
       className="flex flex-col h-full rounded-xl overflow-hidden relative"
@@ -64,25 +97,26 @@ export default function ChatPanel() {
         style={{ background: "linear-gradient(90deg, #8b5cf6, #06b6d4, #8b5cf6)" }}
       />
 
-      {/* Chat Header */}
-      <div
-        className="shrink-0 px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between"
-        style={{
-          background: "rgba(26, 16, 64, 0.3)",
-          borderBottom: "1px solid rgba(139, 92, 246, 0.1)",
-        }}
-      >
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <div className="relative">
-            <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-violet-400" />
-            <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 pulse-glow-cyan" />
+      {!hideHeader && (
+        <div
+          className="shrink-0 px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between"
+          style={{
+            background: "rgba(26, 16, 64, 0.3)",
+            borderBottom: "1px solid rgba(139, 92, 246, 0.1)",
+          }}
+        >
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="relative">
+              <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-violet-400" />
+              <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 pulse-glow-cyan" />
+            </div>
+            <span className="text-xs sm:text-sm font-semibold text-white/90">AI 外援</span>
           </div>
-          <span className="text-xs sm:text-sm font-semibold text-white/90">AI 对话</span>
+          <span className="text-[10px] sm:text-xs text-muted-foreground tabular-nums">
+            {chatMessages.length} 条消息
+          </span>
         </div>
-        <span className="text-[10px] sm:text-xs text-muted-foreground tabular-nums">
-          {chatMessages.length} 条消息
-        </span>
-      </div>
+      )}
 
       {/* Messages - scrollable, takes remaining space */}
       <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2 sm:px-4 sm:py-3 space-y-2.5 sm:space-y-3 min-h-0">
@@ -96,9 +130,9 @@ export default function ChatPanel() {
             >
               <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-violet-400" />
             </div>
-            <p className="text-white/60 text-xs sm:text-sm font-medium">面对这个挑战，你会怎么做？</p>
+            <p className="text-white/60 text-xs sm:text-sm font-medium">需要外援时，就把问题交给 AI。</p>
             <p className="text-[11px] sm:text-xs mt-1.5 text-white/30 max-w-[240px] mx-auto">
-              把你的问题、数据或想法说出来，一起找到答案
+              你可以继续追问、让它拆解风险，或把想法磨成可执行方案
             </p>
           </div>
         )}
@@ -106,22 +140,30 @@ export default function ChatPanel() {
           <ChatBubble key={i} msg={msg} />
         ))}
 
-        {isChatLoading && (
+        {isChatLoading && <ThinkingBubble stage={chatWaitStage} />}
+
+        {!isChatLoading && chatWaitStage === "error" && (
           <div className="flex justify-start">
             <div
-              className="rounded-xl px-4 py-3 text-sm"
+              className="rounded-xl px-4 py-3 text-sm max-w-[88%]"
               style={{
-                background: "linear-gradient(135deg, rgba(30, 41, 59, 0.85), rgba(26, 16, 64, 0.3))",
-                border: "1px solid rgba(139, 92, 246, 0.1)",
+                background: "linear-gradient(135deg, rgba(127, 29, 29, 0.26), rgba(26, 16, 64, 0.25))",
+                border: "1px solid rgba(248, 113, 113, 0.2)",
               }}
             >
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-violet-400 thinking-dot" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-violet-400 thinking-dot" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-violet-400 thinking-dot" />
+              <div className="flex items-start gap-2">
+                <Clock className="w-4 h-4 text-red-300 mt-0.5" />
+                <div>
+                  <p className="text-xs text-red-100/80 font-medium">AI 这次没有顺利回复。</p>
+                  <p className="text-[11px] text-white/42 mt-1">你的上一条输入已保留，可以直接重试。</p>
+                  <button
+                    onClick={retryLastChatMessage}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-white bg-white/8 hover:bg-white/12 border border-white/10 transition-colors"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    重试上一条
+                  </button>
                 </div>
-                <span className="text-xs text-violet-300 font-medium">AI 正在思考</span>
               </div>
             </div>
           </div>
@@ -154,6 +196,38 @@ export default function ChatPanel() {
           backdropFilter: "blur(12px)",
         }}
       >
+        {quickRefs.length > 0 && (
+          <div className="mb-2 flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
+            <span className="shrink-0 text-[10px] font-semibold text-white/32 px-1">
+              引用资料
+            </span>
+            {quickRefs.map((ref) => {
+              const Icon = ref.icon;
+              return (
+                <button
+                  key={ref.id}
+                  onClick={() => {
+                    if (ref.disabled) {
+                      onOpenTaskIntel?.();
+                      return;
+                    }
+                    appendReference(ref);
+                  }}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border transition-colors"
+                  style={{
+                    background: ref.disabled ? "rgba(255,255,255,0.025)" : "rgba(6, 182, 212, 0.08)",
+                    borderColor: ref.disabled ? "rgba(255,255,255,0.06)" : "rgba(6, 182, 212, 0.16)",
+                    color: ref.disabled ? "rgba(255,255,255,0.35)" : "#a5f3fc",
+                  }}
+                  title={ref.disabled ? ref.disabledReason : `引用${ref.label}`}
+                >
+                  <Icon className="w-3 h-3" />
+                  {ref.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="flex items-end gap-1.5 sm:gap-2">
           <textarea
             ref={textareaRef}
@@ -165,7 +239,7 @@ export default function ChatPanel() {
                 ? "AI正在思考中..."
                 : subPhase === "crisis"
                   ? "输入应对策略..."
-                  : "输入你的问题..."
+                  : "向 AI 外援提问..."
             }
             rows={2}
             disabled={isCrisisAndNotRolled}
@@ -195,6 +269,137 @@ export default function ChatPanel() {
             )}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+type QuickReference = {
+  id: string;
+  label: string;
+  content: string;
+  icon: React.ElementType;
+  disabled?: boolean;
+  disabledReason?: string;
+};
+
+function buildQuickReferences(
+  currentTask: ReturnType<typeof useGameStore.getState>["currentTask"],
+  unlockedHints: string[],
+  unlockedHiddenData: string[]
+): QuickReference[] {
+  if (!currentTask || currentTask.type !== "main") return [];
+
+  const refs: QuickReference[] = [];
+  const record = currentTask as Record<string, unknown>;
+  const contract = record.contract as ContractData | undefined;
+  const hiddenData = record.hiddenData ? String(record.hiddenData) : "";
+  const hiddenLabel = record.hiddenDataLabel ? String(record.hiddenDataLabel) : "隐藏情报";
+  const isAutoData =
+    currentTask.data === "（系统将根据你在上一关的选择，自动填充守店方案或转型方案的上下文）" ||
+    currentTask.data === "（系统自动汇总你在前9个任务中的关键决策和评分）";
+
+  if (currentTask.data && !isAutoData) {
+    refs.push({
+      id: "task-data",
+      label: "参考资料",
+      content: currentTask.data,
+      icon: FileSearch,
+    });
+  }
+
+  if (contract) {
+    refs.push({
+      id: "contract",
+      label: "合同",
+      content: contractToReferenceText(contract),
+      icon: ScrollText,
+    });
+  }
+
+  if (hiddenData) {
+    const unlocked = unlockedHiddenData.includes(currentTask.id);
+    refs.push({
+      id: "hidden-data",
+      label: hiddenLabel,
+      content: hiddenData,
+      icon: unlocked ? FileSearch : Lock,
+      disabled: !unlocked,
+      disabledReason: "请先在任务资料库解锁该情报",
+    });
+  }
+
+  refs.push({
+    id: "hint",
+    label: "策略锦囊",
+    content: currentTask.task,
+    icon: unlockedHints.includes(currentTask.id) ? Lightbulb : Lock,
+    disabled: !unlockedHints.includes(currentTask.id),
+    disabledReason: "请先在任务资料库解锁策略锦囊",
+  });
+
+  return refs;
+}
+
+function contractToReferenceText(contract: ContractData) {
+  const lines = [
+    `合同名称：${contract.title}`,
+    `甲方：${contract.parties.partyA}`,
+    `乙方：${contract.parties.partyB}`,
+    `主要条款：${contract.terms.join("；")}`,
+    `财务条款：金额${contract.financials.amount}，付款方式${contract.financials.paymentTerms}，期限${contract.financials.duration}`,
+    `风险条款：${contract.risks.join("；")}`,
+  ];
+  if (contract.specialConditions?.length) {
+    lines.push(`特别约定：${contract.specialConditions.join("；")}`);
+  }
+  return lines.join("\n");
+}
+
+function ThinkingBubble({ stage }: { stage: "idle" | "connecting" | "thinking" | "slow" | "error" }) {
+  const [tipIndex, setTipIndex] = useState(0);
+  const tips = [
+    "经营顾问正在梳理你的问题...",
+    "正在核对关键数据和约束...",
+    "正在组织更可执行的建议...",
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => setTipIndex((i) => (i + 1) % tips.length), 3200);
+    return () => clearInterval(timer);
+  }, [tips.length]);
+
+  const label =
+    stage === "connecting"
+      ? "正在连接 AI 服务..."
+      : stage === "slow"
+        ? "AI 思考有点久，你可以继续等待"
+        : tips[tipIndex];
+
+  return (
+    <div className="flex justify-start">
+      <div
+        className="rounded-xl px-4 py-3 text-sm max-w-[88%]"
+        style={{
+          background: "linear-gradient(135deg, rgba(30, 41, 59, 0.88), rgba(26, 16, 64, 0.36))",
+          border: `1px solid ${stage === "slow" ? "rgba(245, 158, 11, 0.24)" : "rgba(139, 92, 246, 0.12)"}`,
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <div className="w-1.5 h-1.5 rounded-full bg-violet-400 thinking-dot" />
+            <div className="w-1.5 h-1.5 rounded-full bg-violet-400 thinking-dot" />
+            <div className="w-1.5 h-1.5 rounded-full bg-violet-400 thinking-dot" />
+          </div>
+          <span className={`text-xs font-medium ${stage === "slow" ? "text-amber-300" : "text-violet-300"}`}>
+            {label}
+          </span>
+        </div>
+        {stage === "slow" && (
+          <p className="mt-1.5 text-[11px] text-white/35">
+            网络或模型响应可能较慢，系统会在超时后释放输入框。
+          </p>
+        )}
       </div>
     </div>
   );

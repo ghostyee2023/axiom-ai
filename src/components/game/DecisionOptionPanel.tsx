@@ -2,16 +2,20 @@
 
 import { useGameStore } from "@/store/gameStore";
 import { type DecisionOption } from "@/data/scenario";
+import ChatPanel from "./ChatPanel";
 import {
   Sparkles,
   Check,
   Loader2,
+  RotateCcw,
   TrendingUp,
   TrendingDown,
   Coins,
   Star,
-  Zap,
   ChevronRight,
+  MessageCircle,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -60,8 +64,13 @@ export default function DecisionOptionPanel() {
   const aiDecisionOptions = useGameStore((s) => s.aiDecisionOptions);
   const isDecisionOptionsLoading = useGameStore((s) => s.isDecisionOptionsLoading);
   const consequenceRevealed = useGameStore((s) => s.consequenceRevealed);
+  const generateDecisionOptions = useGameStore((s) => s.generateDecisionOptions);
+  const decisionOptionsNotice = useGameStore((s) => s.decisionOptionsNotice);
+  const chatMessages = useGameStore((s) => s.chatMessages);
+  const decisionOptionsGeneratedAssistantCount = useGameStore((s) => s.decisionOptionsGeneratedAssistantCount);
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [showChatReview, setShowChatReview] = useState(false);
 
   if (!decisionOptionPhase) return null;
 
@@ -71,11 +80,15 @@ export default function DecisionOptionPanel() {
       ? ((currentTask as Record<string, unknown>).decisionOptions as DecisionOption[] | undefined) || []
       : [];
 
-  const options: DecisionOption[] = aiDecisionOptions || hardcodedOptions;
+  const options: DecisionOption[] = isDecisionOptionsLoading
+    ? []
+    : aiDecisionOptions || hardcodedOptions;
 
-  if (options.length === 0 && !isDecisionOptionsLoading) return null;
+  if (options.length === 0 && !isDecisionOptionsLoading && !decisionOptionsNotice) return null;
 
   const isOptionSelected = selectedDecisionOption !== null;
+  const assistantReplyCount = chatMessages.filter((m) => m.role === "assistant").length;
+  const hasNewAssistantOutput = assistantReplyCount > decisionOptionsGeneratedAssistantCount;
 
   return (
     <div
@@ -86,26 +99,80 @@ export default function DecisionOptionPanel() {
       }}
     >
       <div className="w-full max-w-4xl max-h-[95vh] sm:max-h-none overflow-y-auto custom-scrollbar">
-        {/* Title */}
         <div className="text-center mb-3 sm:mb-6">
-          <div className="flex items-center justify-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-pulse" />
-            <h2 className="text-base sm:text-xl font-bold gradient-text">选择你的方案</h2>
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-pulse" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-1.5 sm:mb-2">
+            <div className="hidden sm:block w-32" />
+            <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-pulse" />
+              <h2 className="text-base sm:text-xl font-bold gradient-text">选择行动方案</h2>
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-pulse" />
+            </div>
+            <button
+              onClick={() => setShowChatReview(true)}
+              className="mx-auto sm:mx-0 w-fit inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-cyan-100 bg-cyan-400/10 border border-cyan-300/18 hover:bg-cyan-400/16 transition-colors"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              回看 AI 对话
+            </button>
           </div>
           <p className="text-xs sm:text-sm text-white/50">
-            每个选择都将影响你的经营之路，请谨慎决策
+            {isDecisionOptionsLoading
+              ? "AI 外援正在把对话整理成行动卡。"
+              : decisionOptionsNotice
+                ? "还没有形成可执行行动卡。"
+                : "AI 外援已把对话整理成行动卡。现在，由你决定真正执行哪一张。"}
           </p>
           {isDecisionOptionsLoading && (
-            <div className="flex items-center justify-center gap-2 mt-2">
-              <Loader2 className="w-3.5 h-3.5 text-violet-400 animate-spin" />
-              <span className="text-xs text-violet-300/70">AI正在根据你的对话生成个性化方案...</span>
+            <div
+              className="mx-auto mt-5 max-w-sm rounded-2xl px-4 py-5"
+              style={{
+                background: "rgba(139, 92, 246, 0.08)",
+                border: "1px solid rgba(139, 92, 246, 0.18)",
+              }}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 text-violet-300 animate-spin" />
+                <span className="text-sm text-violet-200/80">生成方案中...</span>
+              </div>
+              <p className="mt-2 text-xs text-white/38">
+                方案卡生成完成后才会展示。
+              </p>
             </div>
           )}
         </div>
 
+        {decisionOptionsNotice && !isDecisionOptionsLoading && (
+          <div
+            className="mx-auto mb-4 max-w-md rounded-2xl px-4 py-4 text-left"
+            style={{
+              background: "rgba(245, 158, 11, 0.08)",
+              border: "1px solid rgba(245, 158, 11, 0.18)",
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" />
+              <div>
+                <div className="text-sm font-bold text-amber-100/90">
+                  您还没有得出具体的行动方案
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-white/52">
+                  {decisionOptionsNotice}
+                </p>
+                <button
+                  onClick={() => setShowChatReview(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-cyan-100 bg-cyan-400/10 border border-cyan-300/18 hover:bg-cyan-400/16 transition-colors"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  继续和 AI 对话
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
+        {!isDecisionOptionsLoading && options.length > 0 && (
+        <div className="flex sm:grid sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory custom-scrollbar pb-2 sm:pb-0">
           {options.map((option, index) => {
             const accent = cardAccents[index % cardAccents.length];
             const isSelected = selectedDecisionOption?.id === option.id;
@@ -122,7 +189,7 @@ export default function DecisionOptionPanel() {
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
                 disabled={isOptionSelected}
-                className="relative rounded-2xl overflow-hidden text-left transition-all duration-500 group animate-fade-in-up"
+                className="relative rounded-2xl overflow-hidden text-left transition-all duration-500 group animate-fade-in-up min-w-[86vw] sm:min-w-0 snap-center"
                 style={{
                   animationDelay: `${index * 0.15}s`,
                   animationFillMode: "both",
@@ -185,17 +252,11 @@ export default function DecisionOptionPanel() {
                     {option.description}
                   </p>
 
-                  {/* Mystery indicator - tells player consequences are hidden */}
                   {!isSelected && (
-                    <div
-                      className="rounded-lg px-3 py-2 flex items-center gap-2 text-xs"
-                      style={{
-                        background: "rgba(10, 14, 26, 0.5)",
-                        border: `1px solid ${accent.badgeBorder}`,
-                      }}
-                    >
-                      <Zap className="w-3 h-3" style={{ color: accent.icon }} />
-                      <span className="text-white/40">选择后揭晓后果...</span>
+                    <div className="grid grid-cols-3 gap-1.5 mb-3">
+                      <ValuePill label="风险" value={getRiskLevel(option)} />
+                      <ValuePill label="成本" value={getCostLevel(option)} />
+                      <ValuePill label="难度" value={getDifficultyLevel(option)} />
                     </div>
                   )}
 
@@ -290,26 +351,124 @@ export default function DecisionOptionPanel() {
             );
           })}
         </div>
-
-        {/* Selected consequence display (after reveal) */}
-        {selectedDecisionOption && consequenceRevealed && (
-          <div className="mt-3 sm:mt-6 text-center animate-fade-in-up">
-            <div
-              className="inline-flex items-center gap-1.5 sm:gap-2 px-4 py-2 sm:px-6 sm:py-3 rounded-xl"
-              style={{
-                background: "linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(6, 182, 212, 0.1))",
-                border: "1px solid rgba(16, 185, 129, 0.2)",
-              }}
-            >
-              <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-              <span className="text-xs sm:text-sm text-emerald-300 font-medium">
-                {selectedDecisionOption.consequence}
-              </span>
-            </div>
-            <p className="text-xs text-white/30 mt-2">即将进入下一关...</p>
-          </div>
         )}
+
       </div>
+
+      {showChatReview && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: "rgba(10, 14, 26, 0.72)", backdropFilter: "blur(8px)" }}
+          onClick={() => setShowChatReview(false)}
+        >
+          <div
+            className="w-full sm:max-w-2xl h-[82vh] sm:h-[78vh] rounded-t-3xl sm:rounded-2xl overflow-hidden"
+            style={{
+              background: "linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(10, 14, 26, 0.98))",
+              border: "1px solid rgba(6, 182, 212, 0.18)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.48)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-12 px-4 flex items-center justify-between border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-cyan-300" />
+                <span className="text-sm font-bold text-white">AI 外援对话</span>
+              </div>
+              <button
+                onClick={() => setShowChatReview(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="h-[calc(100%-3rem)] p-2 flex flex-col gap-2 min-h-0">
+              <div className="flex-1 min-h-0">
+                <ChatPanel hideHeader />
+              </div>
+              {!selectedDecisionOption && hasNewAssistantOutput && (
+                <button
+                  onClick={() => {
+                    setShowChatReview(false);
+                    generateDecisionOptions();
+                  }}
+                  disabled={isDecisionOptionsLoading}
+                  className="shrink-0 w-full rounded-xl px-4 py-3 text-sm font-bold text-white btn-gradient-violet disabled:opacity-45 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {isDecisionOptionsLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-4 h-4" />
+                  )}
+                  重新生成行动卡
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function ValuePill({ label, value }: { label: string; value: string }) {
+  const tone = getLevelTone(value);
+  return (
+    <div
+      className="rounded-lg px-2 py-1 border"
+      style={{
+        background: tone.bg,
+        borderColor: tone.border,
+      }}
+    >
+      <div className="text-[9px]" style={{ color: tone.muted }}>{label}</div>
+      <div className="mt-0.5 text-[11px] font-semibold" style={{ color: tone.text }}>{value}</div>
+    </div>
+  );
+}
+
+function getLevelTone(value: string) {
+  if (value === "高") {
+    return {
+      bg: "rgba(239, 68, 68, 0.10)",
+      border: "rgba(239, 68, 68, 0.24)",
+      text: "#fca5a5",
+      muted: "rgba(252, 165, 165, 0.62)",
+    };
+  }
+  if (value === "中") {
+    return {
+      bg: "rgba(245, 158, 11, 0.10)",
+      border: "rgba(245, 158, 11, 0.24)",
+      text: "#fcd34d",
+      muted: "rgba(252, 211, 77, 0.62)",
+    };
+  }
+  return {
+    bg: "rgba(16, 185, 129, 0.10)",
+    border: "rgba(16, 185, 129, 0.24)",
+    text: "#6ee7b7",
+    muted: "rgba(110, 231, 183, 0.62)",
+  };
+}
+
+function getRiskLevel(option: DecisionOption) {
+  const risk = Math.abs(option.scoreModifier) + (option.revenueModifier < 0 ? 1 : 0) + (option.coinModifier < 0 ? 1 : 0);
+  if (risk >= 4) return "高";
+  if (risk >= 2) return "中";
+  return "低";
+}
+
+function getCostLevel(option: DecisionOption) {
+  const cost = Math.abs(option.revenueModifier) + Math.max(0, -option.coinModifier) * 1000;
+  if (cost >= 5000) return "高";
+  if (cost >= 1000) return "中";
+  return "低";
+}
+
+function getDifficultyLevel(option: DecisionOption) {
+  const text = `${option.title}${option.description}`;
+  if (/系统|扩张|全面|切换|合作|外包|改造|上线/.test(text)) return "高";
+  if (/优化|混合|调整|测试|试点|分阶段/.test(text)) return "中";
+  return "低";
 }

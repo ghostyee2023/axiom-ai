@@ -19,19 +19,17 @@ import DecisionOptionPanel from "@/components/game/DecisionOptionPanel";
 import {
   ShoppingBag,
   Sparkles,
-  FileText,
   MessageCircle,
   ClipboardList,
+  FileText,
+  X,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-
-type MobileTab = "task" | "chat";
 
 export default function GamePage() {
   const phase = useGameStore((s) => s.phase);
   const subPhase = useGameStore((s) => s.subPhase);
   const currentTask = useGameStore((s) => s.currentTask);
-  const diceRolled = useGameStore((s) => s.diceRolled);
   const opportunityAccepted = useGameStore((s) => s.opportunityAccepted);
   const showShop = useGameStore((s) => s.showShop);
   const continueAfterCheckpoint = useGameStore(
@@ -47,13 +45,32 @@ export default function GamePage() {
   const reviewedCheckpointId = useGameStore((s) => s.reviewedCheckpointId);
   const isFinalReportLoading = useGameStore((s) => s.isFinalReportLoading);
   const finalReport = useGameStore((s) => s.finalReport);
+  const decisionOptionPhase = useGameStore((s) => s.decisionOptionPhase);
 
   const strings = scenarioData.strings;
-  const [mobileTab, setMobileTab] = useState<MobileTab>("task");
+  const [aiDrawerState, setAiDrawerState] = useState<{ open: boolean; step: number }>({ open: false, step: -1 });
+  const [taskIntelState, setTaskIntelState] = useState<{ open: boolean; step: number }>({ open: false, step: -1 });
 
   // Auto-switch to chat tab on mobile when reaching checkpoint
   // Use derived state: if at checkpoint, always show chat; otherwise use manual tab
-  const effectiveMobileTab: MobileTab = subPhase === "checkpoint" ? "chat" : mobileTab;
+  const effectiveMobileTab = subPhase === "checkpoint" ? "chat" : "task";
+
+  const shouldHideAiDrawer =
+    decisionOptionPhase ||
+    subPhase === "scoring" ||
+    subPhase === "checkpoint" ||
+    subPhase === "shop";
+  const aiDrawerVisible =
+    aiDrawerState.open &&
+    aiDrawerState.step === currentStepIndex &&
+    !shouldHideAiDrawer;
+  const taskIntelOpen =
+    taskIntelState.open &&
+    taskIntelState.step === currentStepIndex;
+  const setAiDrawerOpenForStep = (open: boolean) =>
+    setAiDrawerState({ open, step: open ? currentStepIndex : -1 });
+  const setTaskIntelOpenForStep = (open: boolean) =>
+    setTaskIntelState({ open, step: open ? currentStepIndex : -1 });
 
   // Auto-generate review when reaching checkpoint
   useEffect(() => {
@@ -96,7 +113,6 @@ export default function GamePage() {
   // Determine if decision panel should show
   const showDecisionPanel =
     subPhase === "task" ||
-    (subPhase === "crisis" && diceRolled) ||
     (subPhase === "opportunity" && opportunityAccepted);
 
   // Render based on phase
@@ -109,61 +125,27 @@ export default function GamePage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden game-bg">
       {/* Top Status Bar */}
-      <div className="shrink-0 px-2 pt-2 pb-1 sm:px-4 sm:pt-3">
+      <div className="shrink-0 px-2 pt-2 pb-2 sm:px-4 sm:pt-3 sm:pb-3">
         <StatusBar />
       </div>
 
-      {/* Mobile Tab Switcher - only visible on small screens */}
-      <div className="lg:hidden shrink-0 px-2 pb-1">
-        <div
-          className="flex rounded-xl overflow-hidden"
-          style={{
-            background: "rgba(10, 14, 26, 0.6)",
-            border: "1px solid rgba(139, 92, 246, 0.12)",
-          }}
-        >
-          <button
-            onClick={() => setMobileTab("task")}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all duration-200"
+      {subPhase === "checkpoint" && (
+        <div className="lg:hidden shrink-0 px-2 pb-1">
+          <div
+            className="flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-amber-200"
             style={{
-              background: effectiveMobileTab === "task"
-                ? "linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.08))"
-                : "transparent",
-              color: effectiveMobileTab === "task" ? "#c4b5fd" : "rgba(255,255,255,0.4)",
-              borderBottom: effectiveMobileTab === "task" ? "2px solid #8b5cf6" : "2px solid transparent",
+              background: "rgba(245, 158, 11, 0.08)",
+              border: "1px solid rgba(245, 158, 11, 0.14)",
             }}
           >
-            <FileText className="w-3.5 h-3.5" />
-            任务
-          </button>
-          <button
-            onClick={() => setMobileTab("chat")}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all duration-200"
-            style={{
-              background: effectiveMobileTab === "chat"
-                ? "linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(6, 182, 212, 0.08))"
-                : "transparent",
-              color: effectiveMobileTab === "chat" ? "#67e8f9" : "rgba(255,255,255,0.4)",
-              borderBottom: effectiveMobileTab === "chat" ? "2px solid #06b6d4" : "2px solid transparent",
-            }}
-          >
-            {subPhase === "checkpoint" ? (
-              <>
-                <ClipboardList className="w-3.5 h-3.5" />
-                复盘
-              </>
-            ) : (
-              <>
-                <MessageCircle className="w-3.5 h-3.5" />
-                对话
-              </>
-            )}
-          </button>
+            <ClipboardList className="w-3.5 h-3.5" />
+            阶段复盘
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Game Area */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-2 px-2 pb-2 sm:px-4 sm:pb-4 min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 px-2 pb-2 sm:px-4 sm:pb-4 min-h-0 overflow-hidden">
         {/* ====== MOBILE: Tab-based view ====== */}
         {/* Left Panel - Task Info (mobile: only when "task" tab selected) */}
         <div className={`${
@@ -171,7 +153,11 @@ export default function GamePage() {
         } lg:flex lg:flex-col lg:w-[380px] xl:w-[420px] lg:shrink-0 overflow-hidden min-h-0`}>
           {/* Scrollable task content area */}
           <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar flex-1 min-h-0 pb-2">
-            <TaskPanel />
+            <TaskPanel
+              onOpenAiAid={() => setAiDrawerOpenForStep(true)}
+              intelOpen={taskIntelOpen}
+              onIntelOpenChange={setTaskIntelOpenForStep}
+            />
 
             {/* Opportunity Actions */}
             {subPhase === "opportunity" && !opportunityAccepted && (
@@ -278,8 +264,8 @@ export default function GamePage() {
           )}
 
           {/* Floating Decision Panel - Bottom Left */}
-          {showDecisionPanel && (
-            <div className="shrink-0 mt-auto">
+          {showDecisionPanel && !aiDrawerVisible && (
+            <div className="shrink-0 mt-auto sticky bottom-0 z-30">
               <DecisionPanel />
             </div>
           )}
@@ -289,9 +275,61 @@ export default function GamePage() {
         <div className={`${
           effectiveMobileTab === "chat" ? "flex flex-col flex-1" : "hidden"
         } lg:flex lg:flex-col lg:flex-1 min-h-0`}>
-          {subPhase === "checkpoint" ? <ReviewPanel /> : <ChatPanel />}
+          {subPhase === "checkpoint" ? (
+            <ReviewPanel />
+          ) : (
+            <ChatPanel onOpenTaskIntel={() => setTaskIntelOpenForStep(true)} />
+          )}
         </div>
       </div>
+
+      {aiDrawerVisible && (
+        <div
+          className="lg:hidden fixed inset-0 z-50 flex items-end"
+          style={{ background: "rgba(10, 14, 26, 0.72)", backdropFilter: "blur(8px)" }}
+          onClick={() => setAiDrawerOpenForStep(false)}
+        >
+          <div
+            className="w-full h-[82vh] rounded-t-3xl overflow-hidden"
+            style={{
+              background: "linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(10, 14, 26, 0.98))",
+              border: "1px solid rgba(6, 182, 212, 0.18)",
+              boxShadow: "0 -24px 70px rgba(0,0,0,0.45)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-12 px-4 flex items-center justify-between border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-cyan-300" />
+                <span className="text-sm font-bold text-white">AI 外援</span>
+                <span className="text-[10px] text-white/35">需要时呼叫，不抢主舞台</span>
+              </div>
+              <button
+                onClick={() => setAiDrawerOpenForStep(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="h-[calc(82vh-3rem)] p-2 flex flex-col gap-2 min-h-0">
+              <div className="flex-1 min-h-0">
+                <ChatPanel
+                  hideHeader
+                  onOpenTaskIntel={() => {
+                    setAiDrawerOpenForStep(false);
+                    setTaskIntelOpenForStep(true);
+                  }}
+                />
+              </div>
+              {showDecisionPanel && (
+                <div className="shrink-0">
+                  <DecisionPanel />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scoring Result Overlay */}
       {subPhase === "scoring" && (

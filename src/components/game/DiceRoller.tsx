@@ -49,6 +49,7 @@ export default function DiceRoller() {
   const decisionCoins = useGameStore((s) => s.decisionCoins);
   const rollDice = useGameStore((s) => s.rollDice);
   const mitigateCrisis = useGameStore((s) => s.mitigateCrisis);
+  const acceptCrisisResult = useGameStore((s) => s.acceptCrisisResult);
   const inventory = useGameStore((s) => s.inventory);
 
   if (!currentEvent || currentEvent.type !== "crisis") return null;
@@ -89,7 +90,7 @@ export default function DiceRoller() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" />
-              <span className="text-xs sm:text-sm font-bold text-red-400">掷骰子决定命运</span>
+              <span className="text-xs sm:text-sm font-bold text-red-400">处理突发挑战</span>
             </div>
             <span className="text-[9px] sm:text-[10px] text-white/30">1=最坏 ⚔️ 6=最轻 🛡️</span>
           </div>
@@ -237,6 +238,17 @@ export default function DiceRoller() {
               </div>
             )}
           </div>
+
+          <button
+            onClick={acceptCrisisResult}
+            className="w-full py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            style={{
+              background: "linear-gradient(135deg, #ef4444, #8b5cf6)",
+              boxShadow: "0 8px 24px rgba(239,68,68,0.16)",
+            }}
+          >
+            记录影响，继续主线
+          </button>
         </div>
       )}
     </div>

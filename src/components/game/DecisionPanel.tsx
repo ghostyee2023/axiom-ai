@@ -44,7 +44,7 @@ export default function DecisionPanel() {
 
   return (
     <div
-      className="rounded-xl overflow-hidden animate-fade-in-up relative"
+      className="rounded-xl overflow-hidden animate-fade-in-up relative z-30 shadow-2xl"
       style={{
         background: "linear-gradient(135deg, rgba(26, 16, 64, 0.4), rgba(10, 14, 26, 0.7))",
         border: "1px solid rgba(139, 92, 246, 0.18)",
@@ -155,14 +155,14 @@ export default function DecisionPanel() {
             chatMessages.length === 0 ||
             isCrisisAndNotRolled
           }
-          className="w-full py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all duration-300 btn-gradient-violet disabled:opacity-35 relative overflow-hidden"
+          className="w-full py-3 sm:py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all duration-300 btn-gradient-violet disabled:opacity-35 relative overflow-hidden"
         >
           {/* Shimmer effect on button */}
           <div className="absolute inset-0 animate-shimmer" />
           {isJudging ? (
             <>
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span className="relative">评分中...</span>
+              <span className="relative">AI评估中...</span>
             </>
           ) : isChatLoading ? (
             <>
@@ -172,7 +172,7 @@ export default function DecisionPanel() {
           ) : (
             <>
               <Zap className="w-4 h-4 text-white relative" />
-              <span className="relative">提交决策</span>
+              <span className="relative">提交方案，生成行动卡</span>
             </>
           )}
         </button>

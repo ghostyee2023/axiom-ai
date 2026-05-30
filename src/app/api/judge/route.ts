@@ -29,12 +29,12 @@ export async function POST(request: NextRequest) {
 
     const apiMessages = [
       {
-        role: "assistant",
+        role: "system",
         content: judgePrompt,
       },
       {
         role: "user",
-        content: "请评估该学员的表现，严格按照JSON格式输出评分结果。",
+        content: "请评估该学员的表现。只输出一个合法 JSON 对象，不要使用 Markdown 代码块，不要输出解释文字。comment 字段必须用中文，并按“优秀：...”和“待改进：...”两段书写。",
       },
     ];
 
@@ -77,18 +77,11 @@ export async function POST(request: NextRequest) {
       reply = completion.choices[0]?.message?.content || "";
     }
 
-    // Try to parse JSON from the response
     let result;
     try {
-      // Try to find JSON in the response
-      const jsonMatch = reply.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        result = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("No JSON found in response");
-      }
-    } catch {
-      // Fallback if JSON parsing fails
+      result = parseJudgeJson(reply);
+    } catch (error) {
+      console.error("Judge JSON parse error:", error, reply.slice(0, 500));
       result = {
         scores: {
           "角色设定": 5,
@@ -98,7 +91,7 @@ export async function POST(request: NextRequest) {
           "逻辑严谨": 5,
         },
         total: 25,
-        comment: "评分系统暂时异常，已提供默认评分。请重试获取准确评分。",
+        comment: "优秀：你已经完成了一次可结算的决策表达，系统先按基础分记录本轮结果。\n\n待改进：这次 AI 评分返回格式不完整，建议补一句更明确的行动方案后再提交。",
       };
     }
 
@@ -110,4 +103,59 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function parseJudgeJson(reply: string) {
+  const trimmed = reply
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "");
+  const direct = tryParseJson(trimmed);
+  if (direct) return normalizeJudgeResult(direct);
+
+  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("No JSON found in response");
+  const parsed = tryParseJson(jsonMatch[0]);
+  if (!parsed) throw new Error("Invalid JSON in response");
+  return normalizeJudgeResult(parsed);
+}
+
+function tryParseJson(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeJudgeResult(result: Record<string, unknown>) {
+  const scores = typeof result.scores === "object" && result.scores !== null
+    ? result.scores as Record<string, number>
+    : {};
+  const normalizedScores = {
+    "角色设定": clampScore(Number(scores["角色设定"] ?? 5)),
+    "约束清晰": clampScore(Number(scores["约束清晰"] ?? 5)),
+    "信息完整": clampScore(Number(scores["信息完整"] ?? 5)),
+    "迭代深度": clampScore(Number(scores["迭代深度"] ?? 5)),
+    "逻辑严谨": clampScore(Number(scores["逻辑严谨"] ?? 5)),
+  };
+  const total = Object.values(normalizedScores).reduce((sum, value) => sum + value, 0);
+  const comment = String(result.comment || "").trim();
+  return {
+    scores: normalizedScores,
+    total,
+    comment: ensureStructuredComment(comment),
+  };
+}
+
+function clampScore(value: number) {
+  if (!Number.isFinite(value)) return 5;
+  return Math.max(0, Math.min(10, Math.round(value * 10) / 10));
+}
+
+function ensureStructuredComment(comment: string) {
+  if (comment.includes("优秀") && comment.includes("待改进")) return comment;
+  const cleaned = comment || "本轮表达已经形成可评估的决策，但还可以更清楚地说明执行步骤和约束条件。";
+  return `优秀：${cleaned}\n\n待改进：下一次可以把目标、限制、行动步骤和验证方式说得更具体。`;
 }

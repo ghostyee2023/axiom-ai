@@ -10,7 +10,7 @@ import {
   PolarRadiusAxis,
   ResponsiveContainer,
 } from "recharts";
-import { RotateCcw, Coins, Star, Sparkles, Trophy, TrendingUp } from "lucide-react";
+import { RotateCcw, Coins, Star, Sparkles, Trophy, TrendingUp, CheckCircle2, AlertCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -36,6 +36,9 @@ export default function ScoringResult() {
   const rerollCount = useGameStore((s) => s.rerollCount);
   const rerollTask = useGameStore((s) => s.rerollTask);
   const revenueHistory = useGameStore((s) => s.revenueHistory);
+  const numericChangeLog = useGameStore((s) => s.numericChangeLog);
+  const settlementAfterOption = useGameStore((s) => s.settlementAfterOption);
+  const selectedDecisionOption = useGameStore((s) => s.selectedDecisionOption);
   const strings = scenarioData.strings;
 
   if (!currentScore) return null;
@@ -56,6 +59,8 @@ export default function ScoringResult() {
 
   // Get latest revenue entry for this scoring
   const latestRevenue = revenueHistory.length > 0 ? revenueHistory[revenueHistory.length - 1] : null;
+  const recentImpact = numericChangeLog.slice(-4).reverse();
+  const coachComment = parseCoachComment(currentScore.comment || "");
 
   return (
     <div className="game-card rounded-2xl p-3 sm:p-5 space-y-3 sm:space-y-5 animate-fade-in-up">
@@ -68,7 +73,9 @@ export default function ScoringResult() {
 
         <div className="flex items-center justify-center gap-2 mb-1">
           <Trophy className="w-5 h-5 text-amber-400" />
-          <h3 className="text-lg font-bold gradient-text">评分结果</h3>
+          <h3 className="text-lg font-bold gradient-text">
+            {settlementAfterOption ? "本回合结算" : "AI评估结果"}
+          </h3>
           <Trophy className="w-5 h-5 text-amber-400" />
         </div>
       </div>
@@ -143,7 +150,7 @@ export default function ScoringResult() {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
 
         <div className="text-xs text-white/50 mb-2 font-medium tracking-wider uppercase">
-          {currentEvent?.type === "crisis" ? "⚔️ 危机应对得分" : "🎯 任务得分"}
+          {settlementAfterOption ? "📌 决策质量得分" : currentEvent?.type === "crisis" ? "⚔️ 危机应对得分" : "🎯 任务得分"}
         </div>
         <div className="animate-score-reveal" style={{ animationDelay: "0.5s" }}>
           <span className="text-3xl sm:text-4xl font-black gradient-text-gold">
@@ -154,6 +161,22 @@ export default function ScoringResult() {
 
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-24 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
       </div>
+
+      {/* Revenue Result for this task */}
+      {settlementAfterOption && selectedDecisionOption && (
+        <div className="rounded-xl p-4 border border-violet-400/14 bg-violet-400/[0.045]">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-3.5 h-3.5 text-violet-300" />
+            <span className="text-sm font-semibold text-violet-200">本回合结论</span>
+          </div>
+          <p className="text-sm font-bold text-white/84 leading-relaxed">
+            你选择了「{selectedDecisionOption.title}」，这会改变下一关的经营前提。
+          </p>
+          <p className="mt-2 text-xs sm:text-sm text-white/56 leading-relaxed">
+            {selectedDecisionOption.consequence}
+          </p>
+        </div>
+      )}
 
       {/* Revenue Result for this task */}
       {latestRevenue && (
@@ -188,6 +211,25 @@ export default function ScoringResult() {
         </div>
       )}
 
+      {recentImpact.length > 0 && (
+        <div className="rounded-xl p-3 sm:p-4 border border-cyan-400/12 bg-cyan-400/[0.04]">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+            <span className="text-sm font-semibold text-cyan-200">本关影响</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {recentImpact.map((change) => (
+              <div key={change.id} className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 bg-white/[0.035] border border-white/7">
+                <span className="text-xs text-white/55 truncate">{change.label}</span>
+                <span className={`text-xs font-bold tabular-nums ${change.delta >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                  {change.delta > 0 ? "+" : ""}{change.delta.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Mentor's Note Card */}
       {currentScore.comment && (
         <div className="relative rounded-xl p-4 overflow-hidden">
@@ -205,9 +247,30 @@ export default function ScoringResult() {
               </div>
               <span className="text-sm font-semibold text-amber-400">教练评语</span>
             </div>
-            <div className="chat-markdown text-white/70 text-sm leading-relaxed pl-8">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentScore.comment}</ReactMarkdown>
-            </div>
+            {coachComment ? (
+              <div className="pl-8 space-y-2">
+                <CoachNoteBlock
+                  icon={CheckCircle2}
+                  title="优秀"
+                  text={coachComment.excellent}
+                  color="#6ee7b7"
+                  background="rgba(16, 185, 129, 0.08)"
+                  border="rgba(16, 185, 129, 0.16)"
+                />
+                <CoachNoteBlock
+                  icon={AlertCircle}
+                  title="待改进"
+                  text={coachComment.improvement}
+                  color="#fcd34d"
+                  background="rgba(245, 158, 11, 0.08)"
+                  border="rgba(245, 158, 11, 0.16)"
+                />
+              </div>
+            ) : (
+              <div className="chat-markdown text-white/70 text-sm leading-relaxed pl-8">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentScore.comment}</ReactMarkdown>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -215,7 +278,7 @@ export default function ScoringResult() {
       {/* Action Buttons */}
       <div className="flex gap-2 sm:gap-2.5">
         {/* Check if current task has decision options */}
-        {currentTask?.type === "main" &&
+        {!settlementAfterOption && currentTask?.type === "main" &&
         (currentTask as Record<string, unknown>).decisionOptions ? (
           <button
             onClick={continueAfterScoring}
@@ -235,7 +298,7 @@ export default function ScoringResult() {
               background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
             }}
           >
-            {strings.next_level_button}
+            {settlementAfterOption ? "进入下一关" : strings.next_level_button}
           </button>
         )}
 
@@ -262,6 +325,44 @@ export default function ScoringResult() {
           决策币不足，无法重做（需要 {rerollCost} 币）
         </p>
       )}
+    </div>
+  );
+}
+
+function parseCoachComment(comment: string) {
+  const excellentMatch = comment.match(/优秀[:：]\s*([\s\S]*?)(?=\n\s*待改进[:：]|$)/);
+  const improvementMatch = comment.match(/待改进[:：]\s*([\s\S]*)/);
+  if (!excellentMatch && !improvementMatch) return null;
+  return {
+    excellent: excellentMatch?.[1]?.trim() || "本轮已经完成有效表达。",
+    improvement: improvementMatch?.[1]?.trim() || "下一轮可以进一步明确约束、步骤和验证方式。",
+  };
+}
+
+function CoachNoteBlock({
+  icon: Icon,
+  title,
+  text,
+  color,
+  background,
+  border,
+}: {
+  icon: React.ElementType;
+  title: string;
+  text: string;
+  color: string;
+  background: string;
+  border: string;
+}) {
+  return (
+    <div className="rounded-xl px-3 py-2.5 border" style={{ background, borderColor: border }}>
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon className="w-3.5 h-3.5" style={{ color }} />
+        <span className="text-xs font-bold" style={{ color }}>{title}</span>
+      </div>
+      <div className="chat-markdown text-white/68 text-xs sm:text-sm leading-relaxed">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      </div>
     </div>
   );
 }

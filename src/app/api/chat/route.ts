@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     // Build message list with system prompt
     const apiMessages = [
-      { role: "assistant" as const, content: systemPrompt || "你是一位专业的AI助手，帮助用户进行商业决策分析。" },
+      { role: "system" as const, content: systemPrompt || "你是一位专业的AI经营顾问，帮助用户进行商业决策分析。请直接给建议，不要写剧本、旁白或动作描写。" },
       ...messages.map((m: { role: string; content: string }) => ({
         role: m.role === "assistant" ? "assistant" as const : "user" as const,
         content: m.content,

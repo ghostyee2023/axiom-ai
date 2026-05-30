@@ -1,13 +1,14 @@
 "use client";
 
 import { useGameStore } from "@/store/gameStore";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 
 export default function NarrativeTransition() {
   const currentTransition = useGameStore((s) => s.currentTransition);
   const dismissTransition = useGameStore((s) => s.dismissTransition);
 
   if (!currentTransition) return null;
+  const reveal = buildRevealCopy(currentTransition);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
@@ -28,28 +29,18 @@ export default function NarrativeTransition() {
           {/* Decorative shimmer */}
           <div className="absolute inset-0 animate-shimmer pointer-events-none" />
 
-          {/* Narrative text with decorative quote marks */}
-          <div className="text-center space-y-4 relative">
-            {/* Opening quote ornament */}
-            <div className="flex items-center justify-center gap-3">
-              <div className="w-12 h-px bg-gradient-to-r from-transparent to-violet-500/30" />
-              <span className="text-3xl font-serif text-violet-400/30 animate-quote-pulse">&ldquo;</span>
-              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-violet-500/20 to-cyan-500/20" />
-              <span className="text-3xl font-serif text-violet-400/30 animate-quote-pulse">&rdquo;</span>
-              <div className="w-12 h-px bg-gradient-to-l from-transparent to-violet-500/30" />
+          <div className="text-center space-y-3 relative">
+            <div className="mx-auto w-10 h-10 rounded-2xl flex items-center justify-center bg-violet-400/10 border border-violet-300/18">
+              <Sparkles className="w-5 h-5 text-violet-200 animate-pulse" />
             </div>
-
-            {/* Narrative text */}
-            <p className="text-white/85 text-sm sm:text-base leading-relaxed font-light px-2">
+            <div className="text-xs font-bold text-cyan-200/70 tracking-[0.22em]">下一幕</div>
+            <h2 className="text-xl sm:text-2xl font-black text-white leading-snug">
+              {reveal.title}
+            </h2>
+            <p className="text-white/58 text-sm sm:text-base leading-relaxed px-2">
               {currentTransition}
             </p>
-
-            {/* Closing quote ornament */}
-            <div className="flex items-center justify-center gap-2">
-              <div className="w-8 h-px bg-gradient-to-r from-transparent to-amber-500/20" />
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-500/15" />
-              <div className="w-8 h-px bg-gradient-to-l from-transparent to-amber-500/20" />
-            </div>
+            <div className="mx-auto w-20 h-px bg-gradient-to-r from-transparent via-cyan-300/30 to-transparent" />
           </div>
 
           {/* Continue button with gradient */}
@@ -62,7 +53,7 @@ export default function NarrativeTransition() {
                 boxShadow: "0 4px 16px rgba(139, 92, 246, 0.2)",
               }}
             >
-              继续
+              揭开下一关
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -70,4 +61,17 @@ export default function NarrativeTransition() {
       </div>
     </div>
   );
+}
+
+function buildRevealCopy(text: string) {
+  if (/危机|投诉|涨价|竞争|连锁|断供|亏损|罚|压力|糟|下降/.test(text)) {
+    return { title: "糟糕，局面突然变复杂了。" };
+  }
+  if (/机会|增长|奖励|合作|转机|好评|口碑|回升|赚|增加/.test(text)) {
+    return { title: "太好了，转机出现了。" };
+  }
+  if (/上一|选择|决定|影响|后续/.test(text)) {
+    return { title: "诶？你的上一步正在改写局面。" };
+  }
+  return { title: "新的局面被推到了你面前。" };
 }

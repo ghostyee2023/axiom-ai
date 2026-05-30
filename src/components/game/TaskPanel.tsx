@@ -1,10 +1,8 @@
 "use client";
 
 import { useGameStore } from "@/store/gameStore";
-import type { MainTask, CrisisCard, OpportunityCard } from "@/data/scenario";
-import ContractPreview, { ContractPreviewButton } from "./ContractPreview";
+import type { MainTask, CrisisCard, OpportunityCard, ContractData } from "@/data/scenario";
 import {
-  Clock,
   AlertTriangle,
   Sparkles,
   ChevronDown,
@@ -12,18 +10,32 @@ import {
   Lock,
   Unlock,
   FileSearch,
+  ScrollText,
   Lightbulb,
   Eye,
   Coins,
   Copy,
   Check,
+  Users,
+  DollarSign,
   Shield,
   Star,
   Trophy,
+  Bot,
+  ClipboardList,
+  X,
 } from "lucide-react";
 import { useState, useCallback } from "react";
 
-export default function TaskPanel() {
+export default function TaskPanel({
+  onOpenAiAid,
+  intelOpen,
+  onIntelOpenChange,
+}: {
+  onOpenAiAid?: () => void;
+  intelOpen?: boolean;
+  onIntelOpenChange?: (open: boolean) => void;
+}) {
   const currentTask = useGameStore((s) => s.currentTask);
   const currentEvent = useGameStore((s) => s.currentEvent);
   const subPhase = useGameStore((s) => s.subPhase);
@@ -72,16 +84,13 @@ export default function TaskPanel() {
 
       {/* Main Task Card */}
       {currentTask?.type === "main" && subPhase === "task" && (
-        <TaskCard task={currentTask} />
+        <TaskCard
+          task={currentTask}
+          onOpenAiAid={onOpenAiAid}
+          intelOpen={intelOpen}
+          onIntelOpenChange={onIntelOpenChange}
+        />
       )}
-
-      {/* Contract Preview Button */}
-      {currentTask?.type === "main" && subPhase === "task" && (
-        <ContractPreviewButton />
-      )}
-
-      {/* Contract Preview Overlay */}
-      <ContractPreview />
 
       {/* Event Card */}
       {subPhase === "crisis" && currentEvent?.type === "crisis" && (
@@ -372,12 +381,25 @@ function LockedCard({
   );
 }
 
-function TaskCard({ task }: { task: MainTask }) {
+function TaskCard({
+  task,
+  onOpenAiAid,
+  intelOpen,
+  onIntelOpenChange,
+}: {
+  task: MainTask;
+  onOpenAiAid?: () => void;
+  intelOpen?: boolean;
+  onIntelOpenChange?: (open: boolean) => void;
+}) {
+  const [internalIntelOpen, setInternalIntelOpen] = useState(false);
+  const [activeIntelTab, setActiveIntelTab] = useState<string>("data");
   const decisionCoins = useGameStore((s) => s.decisionCoins);
   const unlockedHints = useGameStore((s) => s.unlockedHints);
   const unlockedHiddenData = useGameStore((s) => s.unlockedHiddenData);
   const unlockHint = useGameStore((s) => s.unlockHint);
   const unlockHiddenData = useGameStore((s) => s.unlockHiddenData);
+  const branchContexts = useGameStore((s) => s.branchContexts);
 
   const hintUnlocked = unlockedHints.includes(task.id);
   const hiddenDataUnlocked = unlockedHiddenData.includes(task.id);
@@ -391,20 +413,50 @@ function TaskCard({ task }: { task: MainTask }) {
   const hiddenDataText = (task as Record<string, unknown>).hiddenData
     ? String((task as Record<string, unknown>).hiddenData)
     : "";
+  const contract = (task as Record<string, unknown>).contract as ContractData | undefined;
+  const dataItems = [
+    task.data ? "参考资料" : null,
+    hasHiddenData ? hiddenDataLabel : null,
+    contract ? "合同" : null,
+    "策略锦囊",
+  ].filter(Boolean);
 
   const isAutoData =
     task.data === "（系统将根据你在上一关的选择，自动填充守店方案或转型方案的上下文）" ||
     task.data === "（系统自动汇总你在前9个任务中的关键决策和评分）";
+  const activeBranchContext = branchContexts[branchContexts.length - 1];
+  const branchConclusion = activeBranchContext
+    ? buildBranchConclusion(activeBranchContext.nextPressure)
+    : "";
+  const showIntelDrawer = intelOpen ?? internalIntelOpen;
+  const setShowIntelDrawer = onIntelOpenChange ?? setInternalIntelOpen;
+  const intelTabs = [
+    task.data ? { key: "data", label: "参考资料", icon: FileSearch } : null,
+    contract ? { key: "contract", label: "合同", icon: ScrollText } : null,
+    hasHiddenData ? { key: "hidden", label: "情报", icon: FileSearch } : null,
+    { key: "hint", label: "锦囊", icon: Lightbulb },
+  ].filter(Boolean) as { key: string; label: string; icon: React.ElementType }[];
+  const currentIntelTab = intelTabs.some((tab) => tab.key === activeIntelTab)
+    ? activeIntelTab
+    : intelTabs[0]?.key || "hint";
 
   return (
-    <div className="flex flex-col gap-2 sm:gap-2.5">
-      {/* Title Card - Violet/Purple accent */}
+    <div className="flex flex-col gap-3 sm:gap-3">
+      <section
+        className="rounded-3xl p-3 sm:p-3 space-y-3"
+        style={{
+          background: "linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012))",
+          border: "1px solid rgba(139, 92, 246, 0.12)",
+        }}
+      >
+        <SectionLabel icon={ClipboardList}>任务信息</SectionLabel>
       <div
-        className="rounded-xl p-3 sm:p-4 animate-task-card-enter relative overflow-hidden"
+        className="rounded-2xl p-4 sm:p-5 animate-task-card-enter relative overflow-hidden"
         style={{
           animationDelay: "0ms",
-          background: "linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(26, 16, 64, 0.3))",
-          border: "1px solid rgba(139, 92, 246, 0.2)",
+          background: "linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(6, 182, 212, 0.05), rgba(26, 16, 64, 0.42))",
+          border: "1px solid rgba(139, 92, 246, 0.22)",
+          boxShadow: "0 18px 48px rgba(0,0,0,0.18)",
         }}
       >
         {/* Left accent border */}
@@ -416,114 +468,337 @@ function TaskCard({ task }: { task: MainTask }) {
           style={{ background: "radial-gradient(circle at top right, rgba(139, 92, 246, 0.5), transparent 70%)" }}
         />
 
-        <div className="flex items-start justify-between gap-2 relative">
-          <h3 className="text-lg font-bold text-white">{task.title}</h3>
-          <div className="flex items-center gap-1 text-xs shrink-0 px-2 py-1 rounded-md"
-            style={{
-              background: "rgba(139, 92, 246, 0.1)",
-              border: "1px solid rgba(139, 92, 246, 0.15)",
-            }}
-          >
-            <Clock className="w-3 h-3 text-violet-400" />
-            <span className="text-violet-300 font-medium tabular-nums">{Math.floor(task.timeLimit / 60)}分钟</span>
+        <div className="relative">
+          <div className="min-w-0">
+            <h3 className="text-[22px] sm:text-[21px] font-black text-white leading-[1.22]">{task.title}</h3>
           </div>
         </div>
-        <p className="text-white/60 text-sm leading-relaxed mt-2 relative">
+        <p className="text-white/70 text-sm leading-[1.72] mt-4 relative">
           {task.description}
         </p>
-      </div>
-
-      {/* Challenge Card - Gold/Amber accent with gradient border */}
-      <div
-        className="rounded-xl p-4 animate-task-card-enter relative overflow-hidden"
-        style={{
-          animationDelay: "100ms",
-          background: "linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.03))",
-          border: "1px solid rgba(245, 158, 11, 0.18)",
-        }}
-      >
-        {/* Left gradient accent border */}
-        <div className="absolute left-0 top-0 bottom-0 w-[4px] rounded-l-xl"
-          style={{ background: "linear-gradient(180deg, #f59e0b, #d97706, #f59e0b)" }}
-        />
-        {/* Warning icon decorative glow */}
-        <div className="absolute top-2 right-2 w-8 h-8 opacity-15"
-          style={{ background: "radial-gradient(circle, rgba(245, 158, 11, 0.6), transparent 70%)" }}
-        />
-
-        <div className="flex items-center gap-1.5 text-xs text-amber-400 mb-2">
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span className="font-semibold">核心挑战</span>
-        </div>
-        <p className="text-white/85 text-sm leading-relaxed">
-          {(task as Record<string, unknown>).challenge
-            ? String((task as Record<string, unknown>).challenge)
-            : task.task}
-        </p>
-      </div>
-
-      {/* Reference Data Card (expandable, with copy) */}
-      {task.data && !isAutoData && (
-        <DataSection
-          title="参考资料"
-          icon={FileSearch}
-          contentText={task.data}
-          delay={200}
-        >
-          {task.data}
-        </DataSection>
-      )}
-
-      {/* Auto-generated data (non-expandable, just a note) */}
-      {isAutoData && (
         <div
-          className="rounded-lg px-3 py-2.5 text-xs animate-task-card-enter relative overflow-hidden"
+          className="mt-4 rounded-xl p-3 relative overflow-hidden"
           style={{
-            animationDelay: "200ms",
-            background: "rgba(10, 14, 26, 0.4)",
-            border: "1px solid rgba(139, 92, 246, 0.08)",
+            background: "linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.035))",
+            border: "1px solid rgba(245, 158, 11, 0.18)",
           }}
         >
-          <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg"
-            style={{ background: "linear-gradient(180deg, #8b5cf6, #06b6d4)" }}
-          />
-          <div className="flex items-center gap-1.5 mb-1 pl-3 text-cyan-400">
-            <FileSearch className="w-3 h-3" />
-            <span className="font-medium">参考资料</span>
+          <div className="flex items-center gap-1.5 text-xs text-amber-300 mb-2">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span className="font-semibold">本关要做</span>
           </div>
-          <p className="text-white/40 italic pl-3">{task.data}</p>
+          <p className="text-white/86 text-sm leading-[1.72]">
+            {(task as Record<string, unknown>).challenge
+              ? String((task as Record<string, unknown>).challenge)
+              : task.task}
+          </p>
+        </div>
+      </div>
+
+      {activeBranchContext && (
+        <div
+          className="rounded-xl p-3 animate-task-card-enter relative overflow-hidden"
+          style={{
+            animationDelay: "150ms",
+            background: "linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(16, 185, 129, 0.04))",
+            border: "1px solid rgba(6, 182, 212, 0.16)",
+          }}
+        >
+          <div className="absolute left-0 top-0 bottom-0 w-[4px] rounded-l-xl"
+            style={{ background: "linear-gradient(180deg, #06b6d4, #10b981)" }}
+          />
+          <div className="pl-2">
+            <div className="flex items-center gap-1.5 text-xs text-cyan-300 mb-1">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="font-semibold">上一选择的影响</span>
+            </div>
+            <p className="text-sm font-bold text-white/86 leading-relaxed">
+              {branchConclusion}
+            </p>
+            <div className="mt-2 rounded-lg px-2.5 py-2 bg-cyan-400/[0.06] border border-cyan-300/10">
+              <div className="text-[10px] font-semibold text-cyan-200/80 mb-0.5">原因</div>
+              <p className="text-[11px] text-white/52 leading-relaxed">{activeBranchContext.context}</p>
+            </div>
+          </div>
         </div>
       )}
+      </section>
 
-      {/* Hidden Data Card (locked by default) - Emerald accent */}
-      {hasHiddenData && (
-        <LockedCard
-          label={hiddenDataLabel}
-          cost={hiddenDataCost}
-          isUnlocked={hiddenDataUnlocked}
-          onUnlock={unlockHiddenData}
-          canAfford={decisionCoins >= hiddenDataCost}
-          icon={FileSearch}
-          accentColor="emerald"
-          delay={300}
-        >
-          {hiddenDataText}
-        </LockedCard>
-      )}
-
-      {/* Strategy Hint (锦囊) Card (locked by default) - Amber accent */}
-      <LockedCard
-        label="策略锦囊"
-        cost={task.hintCost}
-        isUnlocked={hintUnlocked}
-        onUnlock={unlockHint}
-        canAfford={decisionCoins >= task.hintCost}
-        icon={Lightbulb}
-        accentColor="amber"
-        delay={hasHiddenData ? 400 : 300}
+      <div
+        className="rounded-3xl p-3.5 sm:p-4 animate-task-card-enter"
+        style={{
+          animationDelay: "220ms",
+          background: "linear-gradient(135deg, rgba(6, 182, 212, 0.055), rgba(139, 92, 246, 0.045))",
+          border: "1px solid rgba(6, 182, 212, 0.14)",
+        }}
       >
-        {task.task}
-      </LockedCard>
+        <div className="mb-3">
+          <SectionLabel icon={Bot}>操作区</SectionLabel>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+          <button
+            onClick={() => setShowIntelDrawer(true)}
+            className="rounded-xl px-3 py-2.5 text-left bg-cyan-400/[0.055] border border-cyan-300/12"
+          >
+            <div className="text-xs font-semibold text-cyan-200">打开资料</div>
+            <div className="mt-0.5 text-[10px] text-white/34">
+              {dataItems.join(" / ")}
+            </div>
+          </button>
+          <button
+            onClick={onOpenAiAid}
+            className="lg:hidden rounded-xl px-3 py-2.5 text-left bg-violet-400/[0.06] border border-violet-300/12"
+          >
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-200">
+              <Bot className="w-3.5 h-3.5" />
+              呼叫外援
+            </div>
+            <div className="mt-0.5 text-[10px] text-white/34">追问、推演方案</div>
+          </button>
+        </div>
+      </div>
+
+      {showIntelDrawer && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: "rgba(10, 14, 26, 0.72)", backdropFilter: "blur(8px)" }}
+          onClick={() => setShowIntelDrawer(false)}
+        >
+          <div
+            className="w-full sm:max-w-xl max-h-[82vh] overflow-hidden rounded-t-3xl sm:rounded-2xl"
+            style={{
+              background: "linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(18, 14, 40, 0.98))",
+              border: "1px solid rgba(139, 92, 246, 0.22)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.48)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-13 px-4 py-3 flex items-center justify-between border-b border-white/10">
+              <div>
+                <div className="text-sm font-bold text-white">任务资料</div>
+              </div>
+              <button
+                onClick={() => setShowIntelDrawer(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="border-b border-white/10 px-4 pt-3 pb-2">
+              <div className="flex gap-1.5 overflow-x-auto custom-scrollbar">
+                {intelTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const active = currentIntelTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveIntelTab(tab.key)}
+                      className={`shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        active ? "text-cyan-100 bg-cyan-400/12 border border-cyan-300/20" : "text-white/42 bg-white/[0.03] border border-white/8"
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="max-h-[calc(82vh-7.5rem)] overflow-y-auto custom-scrollbar p-4 space-y-3">
+              {currentIntelTab === "data" && task.data && !isAutoData && (
+                <div className="rounded-xl p-3 bg-white/[0.035] border border-white/8">
+                  <p className="text-sm leading-relaxed text-white/72 whitespace-pre-wrap">
+                    {task.data}
+                  </p>
+                </div>
+              )}
+              {currentIntelTab === "data" && isAutoData && (
+                <div className="rounded-lg px-3 py-2.5 text-xs text-white/45 border border-white/8 bg-white/[0.035]">
+                  {task.data}
+                </div>
+              )}
+              {currentIntelTab === "contract" && contract && (
+                <ContractInlineView contract={contract} />
+              )}
+              {currentIntelTab === "hidden" && hasHiddenData && (
+                <LockedCard
+                  label={hiddenDataLabel}
+                  cost={hiddenDataCost}
+                  isUnlocked={hiddenDataUnlocked}
+                  onUnlock={unlockHiddenData}
+                  canAfford={decisionCoins >= hiddenDataCost}
+                  icon={FileSearch}
+                  accentColor="emerald"
+                >
+                  {hiddenDataText}
+                </LockedCard>
+              )}
+              {currentIntelTab === "hint" && (
+              <LockedCard
+                label="策略锦囊"
+                cost={task.hintCost}
+                isUnlocked={hintUnlocked}
+                onUnlock={unlockHint}
+                canAfford={decisionCoins >= task.hintCost}
+                icon={Lightbulb}
+                accentColor="amber"
+              >
+                {task.task}
+              </LockedCard>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function buildBranchConclusion(nextPressure: string) {
+  const trimmed = nextPressure.trim();
+  if (!trimmed) return "上一轮选择会影响本关的经营判断。";
+  const first = trimmed.split(/[；。]/).find(Boolean) || trimmed;
+  return first.endsWith("。") ? first : `${first}。`;
+}
+
+function ContractInlineView({ contract }: { contract: ContractData }) {
+  return (
+    <div
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background: "linear-gradient(180deg, rgba(26,18,37,0.92) 0%, rgba(13,17,23,0.88) 52%, rgba(10,14,26,0.94) 100%)",
+        border: "1px solid rgba(139, 92, 246, 0.18)",
+        boxShadow: "0 16px 40px rgba(0,0,0,0.22)",
+      }}
+    >
+      <div
+        className="relative px-4 pt-4 pb-3"
+        style={{
+          background: "linear-gradient(180deg, rgba(139, 92, 246, 0.08) 0%, transparent 100%)",
+          borderBottom: "1px solid rgba(139, 92, 246, 0.1)",
+        }}
+      >
+        <div
+          className="absolute top-0 left-4 right-4 h-[2px]"
+          style={{
+            background: "linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.5), rgba(6, 182, 212, 0.5), transparent)",
+          }}
+        />
+        <h3 className="text-lg font-bold text-white tracking-wide pr-16">{contract.title}</h3>
+        <div
+          className="absolute top-4 right-4 w-14 h-14 rounded-full hidden sm:flex items-center justify-center opacity-20"
+          style={{
+            border: "3px solid #dc2626",
+            color: "#dc2626",
+            transform: "rotate(-15deg)",
+          }}
+        >
+          <span className="text-[10px] font-bold">合同</span>
+        </div>
+      </div>
+
+      <div className="px-4 py-4 space-y-4">
+        <InfoBlock icon={Users} title="合同方">
+          <p>甲方：{contract.parties.partyA}</p>
+          <p>乙方：{contract.parties.partyB}</p>
+        </InfoBlock>
+
+        <InfoBlock icon={FileSearch} title="主要条款">
+          <ol className="list-decimal pl-4 space-y-1">
+            {contract.terms.map((term) => (
+              <li key={term}>{term}</li>
+            ))}
+          </ol>
+        </InfoBlock>
+
+        <InfoBlock icon={DollarSign} title="财务条款">
+          <p>金额：{contract.financials.amount}</p>
+          <p>付款方式：{contract.financials.paymentTerms}</p>
+          <p>期限：{contract.financials.duration}</p>
+        </InfoBlock>
+
+        <InfoBlock icon={AlertTriangle} title="风险条款">
+          <ol className="list-decimal pl-4 space-y-1">
+            {contract.risks.map((risk) => (
+              <li key={risk}>{risk}</li>
+            ))}
+          </ol>
+        </InfoBlock>
+
+        {contract.specialConditions && contract.specialConditions.length > 0 && (
+          <InfoBlock icon={Star} title="特别约定">
+            <ol className="list-decimal pl-4 space-y-1">
+              {contract.specialConditions.map((condition) => (
+                <li key={condition}>{condition}</li>
+              ))}
+            </ol>
+          </InfoBlock>
+        )}
+
+        <div
+          className="flex justify-between items-end pt-4 mt-4"
+          style={{ borderTop: "1px dashed rgba(255, 255, 255, 0.08)" }}
+        >
+          <div className="text-white/24 text-xs">
+            <p>甲方签章：_______________</p>
+            <p className="mt-2">日期：_______________</p>
+          </div>
+          <div
+            className="w-20 h-20 rounded-full hidden sm:flex flex-col items-center justify-center opacity-15"
+            style={{
+              border: "3px solid #dc2626",
+              color: "#dc2626",
+              transform: "rotate(8deg)",
+            }}
+          >
+            <span className="text-[8px] font-bold leading-tight text-center">
+              {contract.parties.partyA.slice(0, 4)}
+            </span>
+            <span className="text-[7px] font-bold mt-0.5">合同专用章</span>
+          </div>
+          <div className="text-white/24 text-xs text-right">
+            <p>乙方签章：_______________</p>
+            <p className="mt-2">日期：_______________</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoBlock({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl p-3 bg-white/[0.035] border border-white/8">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-cyan-200 mb-2">
+        <Icon className="w-3.5 h-3.5" />
+        {title}
+      </div>
+      <div className="text-sm leading-relaxed text-white/72 space-y-1">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function SectionLabel({
+  children,
+  icon: Icon,
+}: {
+  children: React.ReactNode;
+  icon: React.ElementType;
+}) {
+  return (
+    <div className="px-1 flex items-center gap-2 text-[12px] font-bold text-white/72 tracking-normal">
+      <Icon className="w-3.5 h-3.5 text-cyan-300" />
+      {children}
     </div>
   );
 }
