@@ -5,6 +5,7 @@ import { scenarioData } from "@/data/scenario";
 import WelcomePage from "@/components/game/WelcomePage";
 import RoleSelection from "@/components/game/RoleSelection";
 import StatusBar from "@/components/game/StatusBar";
+import StoreScene from "@/components/game/StoreScene";
 import TaskPanel from "@/components/game/TaskPanel";
 import ChatPanel from "@/components/game/ChatPanel";
 import ReviewPanel from "@/components/game/ReviewPanel";
@@ -128,6 +129,12 @@ export default function GamePage() {
       <div className="shrink-0 px-2 pt-2 pb-2 sm:px-4 sm:pt-3 sm:pb-3">
         <StatusBar />
       </div>
+
+      {subPhase !== "checkpoint" && subPhase !== "shop" && (
+        <div className="shrink-0 px-2 pb-2 sm:px-4">
+          <StoreScene />
+        </div>
+      )}
 
       {subPhase === "checkpoint" && (
         <div className="lg:hidden shrink-0 px-2 pb-1">

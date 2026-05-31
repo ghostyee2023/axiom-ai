@@ -10,7 +10,20 @@ import {
   PolarRadiusAxis,
   ResponsiveContainer,
 } from "recharts";
-import { RotateCcw, Coins, Star, Sparkles, Trophy, TrendingUp, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowDownRight,
+  ArrowUpRight,
+  CheckCircle2,
+  Coins,
+  Gauge,
+  RotateCcw,
+  Sparkles,
+  Star,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -69,6 +82,13 @@ export default function ScoringResult() {
   const settlementMood = selectedDecisionOption
     ? buildSettlementMood(selectedDecisionOption.consequence, latestRevenue?.revenue || 0)
     : "";
+  const battleReport = buildBattleReport({
+    score: currentScore.weightedTotal,
+    revenue: latestRevenue?.revenue || 0,
+    impact: recentImpact,
+    settlementAfterOption,
+    eventType: currentEvent?.type,
+  });
 
   return (
     <div className="game-card rounded-2xl p-3 sm:p-5 space-y-3 sm:space-y-5 animate-fade-in-up">
@@ -87,6 +107,16 @@ export default function ScoringResult() {
           <Trophy className="w-5 h-5 text-amber-400" />
         </div>
       </div>
+
+      <BattleReport
+        title={battleReport.title}
+        tone={battleReport.tone}
+        subtitle={battleReport.subtitle}
+        score={currentScore.weightedTotal}
+        revenue={latestRevenue?.revenue ?? null}
+        cumulative={latestRevenue?.cumulative ?? null}
+        impacts={recentImpact}
+      />
 
       {/* Radar Chart - Violet/Purple theme */}
       <div className="w-full h-44 sm:h-56">
@@ -388,6 +418,150 @@ function buildSettlementMood(consequence: string, revenue: number) {
     return "你把不确定性拆小了。接下来，真实反馈会决定这条路能走多远。";
   }
   return "新的局面被打开了。下一关会接住这次选择带来的连锁反应。";
+}
+
+function buildBattleReport({
+  score,
+  revenue,
+  impact,
+  settlementAfterOption,
+  eventType,
+}: {
+  score: number;
+  revenue: number;
+  impact: ReturnType<typeof useGameStore.getState>["numericChangeLog"];
+  settlementAfterOption: boolean;
+  eventType?: string;
+}) {
+  const hasLoss = revenue < 0 || impact.some((entry) => entry.delta < 0 && entry.type !== "trait");
+  if (eventType === "crisis") {
+    return {
+      tone: "danger" as const,
+      title: "危机余波落地",
+      subtitle: hasLoss ? "这次冲击留下了真实损失，下一关要先稳住现金流。" : "你扛住了冲击，但后续仍要补上风险预案。",
+    };
+  }
+  if (settlementAfterOption && revenue < 0) {
+    return {
+      tone: "danger" as const,
+      title: "本回合亏损",
+      subtitle: "方案可以推进，但经营账没有立刻变好。接下来要验证投入是否值得。",
+    };
+  }
+  if (settlementAfterOption && revenue > 0) {
+    return {
+      tone: "growth" as const,
+      title: "本回合进账",
+      subtitle: "这次选择开始转化成经营结果，下一关要接住增长惯性。",
+    };
+  }
+  if (score >= 36) {
+    return {
+      tone: "growth" as const,
+      title: "决策质量优秀",
+      subtitle: "你把 AI 外援用成了经营参谋，方案已经有较强执行感。",
+    };
+  }
+  if (score < 24) {
+    return {
+      tone: "danger" as const,
+      title: "决策仍有缺口",
+      subtitle: "方案还没有完全咬住问题，继续追问 AI 会更稳。",
+    };
+  }
+  return {
+    tone: "stable" as const,
+    title: "完成本关判断",
+    subtitle: "方案基本可用，但还可以把成本、风险和验证方式说得更硬一些。",
+  };
+}
+
+function BattleReport({
+  title,
+  subtitle,
+  tone,
+  score,
+  revenue,
+  cumulative,
+  impacts,
+}: {
+  title: string;
+  subtitle: string;
+  tone: "growth" | "danger" | "stable";
+  score: number;
+  revenue: number | null;
+  cumulative: number | null;
+  impacts: ReturnType<typeof useGameStore.getState>["numericChangeLog"];
+}) {
+  const revenueColor = (revenue || 0) >= 0 ? "#6ee7b7" : "#fca5a5";
+  const toneIcon = tone === "growth" ? ArrowUpRight : tone === "danger" ? ArrowDownRight : Gauge;
+  const ToneIcon = toneIcon;
+  const coinChange = impacts.find((entry) => entry.type === "coins");
+
+  return (
+    <div className={`battle-report battle-report-${tone}`}>
+      <div className="battle-report-glint" />
+      <div className="relative z-10">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="battle-report-icon">
+                <ToneIcon className="w-4 h-4" />
+              </div>
+              <h4 className="text-base sm:text-lg font-black text-white">{title}</h4>
+            </div>
+            <p className="mt-1 text-xs sm:text-sm text-white/58 leading-relaxed">{subtitle}</p>
+          </div>
+          <span className="battle-report-tag">战报</span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <BattleStat
+            label="决策力"
+            value={`${score}分`}
+            color="#fcd34d"
+            icon={Trophy}
+          />
+          <BattleStat
+            label="本回合"
+            value={revenue === null ? "待结算" : `${revenue >= 0 ? "+" : "-"}¥${Math.abs(revenue).toLocaleString()}`}
+            color={revenueColor}
+            icon={(revenue || 0) >= 0 ? TrendingUp : TrendingDown}
+          />
+          <BattleStat
+            label="资源"
+            value={coinChange ? `${coinChange.delta > 0 ? "+" : ""}${coinChange.delta}币` : cumulative === null ? "稳定" : `¥${cumulative.toLocaleString()}`}
+            color={coinChange && coinChange.delta < 0 ? "#fca5a5" : "#67e8f9"}
+            icon={Coins}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BattleStat({
+  label,
+  value,
+  color,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  color: string;
+  icon: React.ElementType;
+}) {
+  return (
+    <div className="battle-stat">
+      <div className="flex items-center gap-1.5">
+        <Icon className="w-3.5 h-3.5" style={{ color }} />
+        <span className="text-[10px] sm:text-xs text-white/42">{label}</span>
+      </div>
+      <div className="mt-1 text-sm sm:text-base font-black tabular-nums" style={{ color }}>
+        {value}
+      </div>
+    </div>
+  );
 }
 
 function CoachNoteBlock({

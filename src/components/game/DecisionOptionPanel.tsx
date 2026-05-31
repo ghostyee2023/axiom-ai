@@ -194,7 +194,7 @@ export default function DecisionOptionPanel() {
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
                 disabled={isOptionSelected}
-                className="relative rounded-2xl overflow-hidden text-left transition-all duration-500 group animate-fade-in-up min-w-[86vw] sm:min-w-0 snap-center"
+                className={`action-card action-card-${index % 3} relative rounded-2xl overflow-hidden text-left transition-all duration-500 group animate-fade-in-up min-w-[86vw] sm:min-w-0 snap-center`}
                 style={{
                   animationDelay: `${index * 0.15}s`,
                   animationFillMode: "both",
@@ -215,6 +215,7 @@ export default function DecisionOptionPanel() {
                     : "0 4px 16px rgba(0,0,0,0.2)",
                 }}
               >
+                <div className="card-foil" />
                 {/* Background gradient */}
                 <div
                   className={`absolute inset-0 bg-gradient-to-br ${accent.gradient} transition-opacity duration-300`}
@@ -232,6 +233,22 @@ export default function DecisionOptionPanel() {
 
                 {/* Content */}
                 <div className="relative p-3 sm:p-5">
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-black tracking-[0.12em]"
+                      style={{
+                        background: accent.badge,
+                        border: `1px solid ${accent.badgeBorder}`,
+                        color: accent.text,
+                      }}
+                    >
+                      ACTION
+                    </span>
+                    <span className="text-[10px] font-semibold text-white/32">
+                      {getCardArchetype(option)}
+                    </span>
+                  </div>
+
                   {/* Card index badge */}
                   <div
                     className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
@@ -486,4 +503,13 @@ function getDifficultyLevel(option: DecisionOption) {
   if (/系统|扩张|全面|切换|合作|外包|改造|上线/.test(text)) return "高";
   if (/优化|混合|调整|测试|试点|分阶段/.test(text)) return "中";
   return "低";
+}
+
+function getCardArchetype(option: DecisionOption) {
+  const text = `${option.title}${option.description}`;
+  if (/合同|合作|谈判|供应商/.test(text)) return "谈判牌";
+  if (/营销|客流|社群|活动|推广|口碑/.test(text)) return "增长牌";
+  if (/成本|现金|资金|预算|亏损/.test(text)) return "财务牌";
+  if (/风险|验证|试点|复盘|数据/.test(text)) return "验证牌";
+  return "经营牌";
 }

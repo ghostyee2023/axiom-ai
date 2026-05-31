@@ -159,6 +159,14 @@ function CopyButton({ text, className = "" }: { text: string; className?: string
   );
 }
 
+function RoundStep({ label, active }: { label: string; active: boolean }) {
+  return (
+    <div className={`round-step ${active ? "round-step-active" : ""}`}>
+      <span>{label}</span>
+    </div>
+  );
+}
+
 /** Expandable/collapsible data section with copy button */
 function DataSection({
   title,
@@ -460,14 +468,14 @@ function TaskCard({
       >
         <SectionLabel icon={ClipboardList}>任务信息</SectionLabel>
       <div
-        className="rounded-2xl p-4 sm:p-5 animate-task-card-enter relative overflow-hidden"
+        className="mission-card rounded-2xl p-4 sm:p-5 animate-task-card-enter relative overflow-hidden"
         style={{
           animationDelay: "0ms",
-          background: "linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(6, 182, 212, 0.05), rgba(26, 16, 64, 0.42))",
           border: "1px solid rgba(139, 92, 246, 0.22)",
           boxShadow: "0 18px 48px rgba(0,0,0,0.18)",
         }}
       >
+        <div className="mission-card-sheen" />
         {/* Left accent border */}
         <div className="absolute left-0 top-0 bottom-0 w-[4px] rounded-l-xl"
           style={{ background: "linear-gradient(180deg, #8b5cf6, #7c3aed)" }}
@@ -479,7 +487,16 @@ function TaskCard({
 
         <div className="relative">
           <div className="min-w-0">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="mission-card-badge">MISSION</span>
+              <span className="text-[10px] font-semibold text-white/34">经营关卡</span>
+            </div>
             <h3 className="text-[22px] sm:text-[21px] font-black text-white leading-[1.22]">{task.title}</h3>
+            <div className="mt-3 grid grid-cols-3 gap-1.5">
+              <RoundStep active label="读局面" />
+              <RoundStep active={false} label="问外援" />
+              <RoundStep active={false} label="出行动卡" />
+            </div>
             <div className="mt-2 inline-flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 bg-amber-300/[0.08] border border-amber-300/14">
               <AlertTriangle className="mt-0.5 w-3.5 h-3.5 shrink-0 text-amber-300" />
               <span className="text-[12px] leading-relaxed font-semibold text-amber-100">
