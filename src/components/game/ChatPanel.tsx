@@ -40,6 +40,8 @@ export default function ChatPanel({
   const subPhase = useGameStore((s) => s.subPhase);
   const diceRolled = useGameStore((s) => s.diceRolled);
   const currentTask = useGameStore((s) => s.currentTask);
+  const currentFollowUpTask = useGameStore((s) => s.currentFollowUpTask);
+  const currentFollowUpData = useGameStore((s) => s.currentFollowUpData);
   const unlockedHints = useGameStore((s) => s.unlockedHints);
   const unlockedHiddenData = useGameStore((s) => s.unlockedHiddenData);
   const decisionHistory = useGameStore((s) => s.decisionHistory);
@@ -59,7 +61,9 @@ export default function ChatPanel({
     decisionHistory,
     branchContexts,
     taskScores,
-    totalScore
+    totalScore,
+    currentFollowUpTask,
+    currentFollowUpData
   );
 
   // Auto-scroll to bottom
@@ -415,8 +419,24 @@ function buildQuickReferences(
   decisionHistory: ReturnType<typeof useGameStore.getState>["decisionHistory"],
   branchContexts: ReturnType<typeof useGameStore.getState>["branchContexts"],
   taskScores: ReturnType<typeof useGameStore.getState>["taskScores"],
-  totalScore: number
+  totalScore: number,
+  currentFollowUpTask: string | null,
+  currentFollowUpData: string | null
 ): QuickReference[] {
+  if (currentFollowUpData) {
+    return [
+      {
+        id: "follow-up-data",
+        label: detectFollowUpReferenceLabel(currentFollowUpData),
+        content: [
+          currentFollowUpTask ? `【当前要做】\n${currentFollowUpTask}` : "",
+          `\n【参考资料】\n${currentFollowUpData}`,
+        ].filter(Boolean).join("\n"),
+        icon: currentFollowUpData.includes("合同") ? ScrollText : FileSearch,
+      },
+    ];
+  }
+
   if (!currentTask || currentTask.type !== "main") return [];
 
   const refs: QuickReference[] = [];
@@ -502,6 +522,14 @@ function buildChatReferenceData(
   }
 
   return rawData;
+}
+
+function detectFollowUpReferenceLabel(data: string) {
+  if (/合同|条款|违约|甲方|乙方|利润分配|合作期限/.test(data)) return "合同";
+  if (/补贴|政策|申请|评审/.test(data)) return "政策资料";
+  if (/采访|媒体|提纲/.test(data)) return "采访资料";
+  if (/探店|博主|视频/.test(data)) return "探店资料";
+  return "参考资料";
 }
 
 function contractToReferenceText(contract: ContractData) {

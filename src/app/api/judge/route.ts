@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       },
       {
         role: "user",
-        content: "请评估该学员的表现。只输出一个合法 JSON 对象，不要使用 Markdown 代码块，不要输出解释文字。comment 字段必须用中文，并按“优秀：...”和“待改进：...”两段书写。",
+        content: "请评估该学员的表现。只输出一个合法 JSON 对象，不要使用 Markdown 代码块，不要输出解释文字。comment 字段必须用中文，并按“优秀：...”和“待改进：...”两段书写；必须明确提到：方案是否解决本关问题、AI协作是否有效、商业判断是否可落地。",
       },
     ];
 
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           "逻辑严谨": 5,
         },
         total: 25,
-        comment: "优秀：你已经完成一次可结算的决策表达，本轮结果已按基础标准记录。\n\n待改进：下一次可以把目标、约束、行动步骤和验证指标说得更清楚。",
+        comment: "优秀：你已经形成了可结算的决策表达，本轮会按基础标准记录。\n\n待改进：下一次需要更明确说明方案如何解决本关问题，并通过多轮 AI 追问补齐成本、资源、风险和验证指标。",
       };
     }
 
@@ -157,5 +157,5 @@ function clampScore(value: number) {
 function ensureStructuredComment(comment: string) {
   if (comment.includes("优秀") && comment.includes("待改进")) return comment;
   const cleaned = comment || "本轮表达已经形成可评估的决策，但还可以更清楚地说明执行步骤和约束条件。";
-  return `优秀：${cleaned}\n\n待改进：下一次可以把目标、限制、行动步骤和验证方式说得更具体。`;
+  return `优秀：${cleaned}\n\n待改进：下一次需要更明确说明方案如何解决本关问题，并通过 AI 追问补齐成本、资源、风险和验证指标。`;
 }

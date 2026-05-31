@@ -83,6 +83,23 @@ export interface BranchContextEntry {
   createdAt: number;
 }
 
+export type EventHistoryEntry = {
+  triggerId: string;
+  eventId: string;
+  eventType: "crisis" | "opportunity" | "skipped_crisis";
+  title: string;
+  createdAt: number;
+};
+
+export type DiceHistoryEntry = {
+  eventId: string;
+  eventTitle: string;
+  value: number;
+  penalty: number;
+  source: "normal" | "double_dice" | "reroll_item";
+  createdAt: number;
+};
+
 /** Player decision tendency traits (0-100, start at 50) */
 export interface DecisionTraits {
   riskAppetite: number;
@@ -185,6 +202,10 @@ export interface GameState {
   numericChangeLog: NumericChangeEntry[];
   /** Story consequences from previous choices that affect later tasks */
   branchContexts: BranchContextEntry[];
+  /** Random event outcomes, used for soft balance so event luck feels playable */
+  eventHistory: EventHistoryEntry[];
+  /** Dice roll outcomes, used to keep crisis luck readable and debuggable */
+  diceHistory: DiceHistoryEntry[];
 
   // Review report
   reviewReport: string | null;
@@ -281,12 +302,13 @@ function drawEventCard(trigger: {
   pool: string[];
   crisisWeight: number;
   opportunityWeight: number;
-}): EventCard {
+}, recentEvents: EventHistoryEntry[] = []): EventCard {
   const { pool, crisisWeight, opportunityWeight } = trigger;
-  const totalWeight = crisisWeight + opportunityWeight;
+  const adjustedWeights = adjustEventWeights(crisisWeight, opportunityWeight, recentEvents);
+  const totalWeight = adjustedWeights.crisisWeight + adjustedWeights.opportunityWeight;
   const roll = Math.random() * totalWeight;
 
-  const isCrisis = roll < crisisWeight;
+  const isCrisis = roll < adjustedWeights.crisisWeight;
   const poolName = isCrisis
     ? pool.find((p) => p.includes("crisis"))
     : pool.find((p) => p.includes("opportunity"));
@@ -301,6 +323,39 @@ function drawEventCard(trigger: {
   return cards[Math.floor(Math.random() * cards.length)];
 }
 
+function adjustEventWeights(
+  crisisWeight: number,
+  opportunityWeight: number,
+  recentEvents: EventHistoryEntry[]
+) {
+  const lastTwo = recentEvents.slice(-2).filter((event) => event.eventType !== "skipped_crisis");
+  const crisisCount = lastTwo.filter((event) => event.eventType === "crisis").length;
+  const opportunityCount = lastTwo.filter((event) => event.eventType === "opportunity").length;
+  let adjustedCrisis = crisisWeight;
+  let adjustedOpportunity = opportunityWeight;
+
+  if (crisisCount >= 2) {
+    adjustedCrisis -= 0.25;
+    adjustedOpportunity += 0.25;
+  } else if (crisisCount === 1) {
+    adjustedCrisis -= 0.12;
+    adjustedOpportunity += 0.12;
+  }
+
+  if (opportunityCount >= 2) {
+    adjustedCrisis += 0.18;
+    adjustedOpportunity -= 0.18;
+  } else if (opportunityCount === 1) {
+    adjustedCrisis += 0.08;
+    adjustedOpportunity -= 0.08;
+  }
+
+  return {
+    crisisWeight: Math.max(0.2, adjustedCrisis),
+    opportunityWeight: Math.max(0.2, adjustedOpportunity),
+  };
+}
+
 function getDiceMapping(mapping: Record<string, { penalty: number; narrative: string }>, diceValue: number) {
   if (mapping[String(diceValue)]) return mapping[String(diceValue)];
   for (const key of Object.keys(mapping)) {
@@ -310,6 +365,27 @@ function getDiceMapping(mapping: Record<string, { penalty: number; narrative: st
     }
   }
   return mapping["1"];
+}
+
+function randomInt(min: number, max: number) {
+  const range = max - min + 1;
+  const cryptoApi = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
+  if (cryptoApi?.getRandomValues) {
+    const values = new Uint32Array(1);
+    cryptoApi.getRandomValues(values);
+    return min + (values[0] % range);
+  }
+  return Math.floor(Math.random() * range) + min;
+}
+
+function rollGameDice(diceHistory: DiceHistoryEntry[]) {
+  const firstRoll = randomInt(1, 6);
+  const recentValues = diceHistory.slice(-2).map((entry) => entry.value);
+  if (recentValues.length >= 2 && recentValues.every((value) => value === firstRoll)) {
+    const secondRoll = randomInt(1, 6);
+    if (secondRoll !== firstRoll) return secondRoll;
+  }
+  return firstRoll;
 }
 
 function numericChange(
@@ -409,6 +485,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   pendingRevenueEntry: null,
   numericChangeLog: [],
   branchContexts: [],
+  eventHistory: [],
+  diceHistory: [],
   reviewReport: null,
   isReviewLoading: false,
   reviewedCheckpointId: null,
@@ -460,6 +538,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       decisionCoins: role.startingResources.decisionCoins,
       currentStepIndex: 0,
       decisionHistory: [],
+      eventHistory: [],
+      diceHistory: [],
       unlockedHints: [],
       unlockedHiddenData: [],
       decisionTraits: { ...defaultDecisionTraits },
@@ -690,7 +770,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   submitTask: async (finalAnswer: string) => {
-    const { chatMessages, currentTask, currentEvent, expertRoleActive, scoreBonus, taskScores, decisionHistory, apiKey, unlockedHints } = get();
+    const { chatMessages, currentTask, currentEvent, expertRoleActive, scoreBonus, taskScores, decisionHistory, apiKey, unlockedHints, currentFollowUpTask } = get();
     set({ isJudging: true, judgeError: null });
 
     // Not using hint increases innovation level
@@ -709,7 +789,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         scoringWeight = currentTask.scoringWeight;
       } else if (currentEvent) {
         cardTitle = currentEvent.title;
-        cardTask = currentEvent.task;
+        cardTask = currentFollowUpTask || currentEvent.task;
       }
 
       const response = await fetch("/api/judge", {
@@ -779,12 +859,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         // === Revenue simulation ===
         // Base monthly revenue depends on the role (realistic Chinese small business numbers)
         const baseMonthlyRevenue = get().selectedRole?.startingResources?.baseMonthlyRevenue || 18600;
-        // Each task generates 5-15% of monthly revenue as base income
-        const taskRevenueBase = Math.round(baseMonthlyRevenue * (0.05 + Math.random() * 0.1));
-        // Better decisions = more revenue: score multiplier based on weightedTotal
-        // weightedTotal typically ranges 5-50, so multiplier ranges ~0.6-1.5
-        const scoreMultiplier = 0.5 + (weightedTotal / 50) * 1.0;
-        const taskRevenue = Math.round(taskRevenueBase * scoreMultiplier);
+        // Each task has a short operating window. Bad decisions can create waste, refunds,
+        // missed sales or rework, so stage revenue is allowed to be negative.
+        const taskRevenueBase = Math.round(baseMonthlyRevenue * (0.06 + Math.random() * 0.08));
+        const scoreQuality = Math.max(-0.7, Math.min(1.25, (weightedTotal - 22) / 28));
+        const taskRevenue = Math.round(taskRevenueBase * scoreQuality);
 
         // Apply crisis penalties as revenue loss
         let revenuePenalty = 0;
@@ -801,10 +880,13 @@ export const useGameStore = create<GameState>((set, get) => ({
           oppRevenueBonus = oppCard.reward.decisionCoins ? Math.round(baseMonthlyRevenue * 0.03) : 0;
         }
 
-        const hasDecisionOptions = currentTask?.type === "main";
+        const hasDecisionOptions = currentTask?.type === "main" || Boolean(currentFollowUpTask);
         const netRevenue = taskRevenue - revenuePenalty + oppRevenueBonus;
         const currentRevenue = get().revenue;
         const newRevenue = Math.round((currentRevenue + netRevenue) * 100) / 100;
+        const operatingText = taskRevenue >= 0
+          ? `经营收益¥${taskRevenue}`
+          : `经营亏损¥${Math.abs(taskRevenue)}`;
 
         const revenueEntry: RevenueEntry = {
           taskId: currentTask?.id || currentEvent?.id || "unknown",
@@ -812,8 +894,8 @@ export const useGameStore = create<GameState>((set, get) => ({
           revenue: netRevenue,
           cumulative: hasDecisionOptions ? currentRevenue : newRevenue,
           reason: netRevenue >= 0
-            ? `经营收入¥${taskRevenue}${revenuePenalty > 0 ? `，危机损失¥${revenuePenalty}` : ''}${oppRevenueBonus > 0 ? `，机遇增收¥${oppRevenueBonus}` : ''}`
-            : `危机损失¥${revenuePenalty}，经营收入¥${taskRevenue}${oppRevenueBonus > 0 ? `，机遇增收¥${oppRevenueBonus}` : ''}`,
+            ? `${operatingText}${revenuePenalty > 0 ? `，危机损失¥${revenuePenalty}` : ""}${oppRevenueBonus > 0 ? `，机遇增收¥${oppRevenueBonus}` : ""}`
+            : `${operatingText}${revenuePenalty > 0 ? `，危机损失¥${revenuePenalty}` : ""}${oppRevenueBonus > 0 ? `，机遇增收¥${oppRevenueBonus}` : ""}，本轮净亏损¥${Math.abs(netRevenue)}`,
         };
 
         // Clear follow-up task on scoring
@@ -833,10 +915,10 @@ export const useGameStore = create<GameState>((set, get) => ({
           currentScore: taskScore,
           taskScores: [...taskScores, taskScore],
           totalScore: scoreAfter,
-          subPhase: hasDecisionOptions ? "task" : "scoring",
+          subPhase: hasDecisionOptions ? get().subPhase : "scoring",
           decisionHistory: newDecisionHistory,
-          currentFollowUpTask: null,
-          currentFollowUpData: null,
+          currentFollowUpTask: hasDecisionOptions ? get().currentFollowUpTask : null,
+          currentFollowUpData: hasDecisionOptions ? get().currentFollowUpData : null,
           revenue: hasDecisionOptions ? currentRevenue : newRevenue,
           revenueHistory: hasDecisionOptions ? get().revenueHistory : [...get().revenueHistory, revenueEntry],
           pendingRevenueEntry: hasDecisionOptions ? revenueEntry : null,
@@ -892,29 +974,59 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   rollDice: () => {
-    const { currentEvent, doubleDiceActive } = get();
+    const { currentEvent, doubleDiceActive, diceHistory } = get();
     if (!currentEvent || currentEvent.type !== "crisis") return;
 
     set({ isDiceRolling: true });
     const crisis = currentEvent as CrisisCard;
 
     setTimeout(() => {
-      const roll = Math.floor(Math.random() * 6) + 1;
+      const latestDiceHistory = get().diceHistory;
+      const roll = rollGameDice(latestDiceHistory);
       const result = getDiceMapping(crisis.dice.mapping, roll);
 
       if (doubleDiceActive) {
-        const roll2 = Math.floor(Math.random() * 6) + 1;
+        const roll2 = rollGameDice([...latestDiceHistory, {
+          eventId: crisis.id,
+          eventTitle: crisis.title,
+          value: roll,
+          penalty: result.penalty,
+          source: "double_dice",
+          createdAt: Date.now(),
+        }]);
         const result2 = getDiceMapping(crisis.dice.mapping, roll2);
         const betterResult = result.penalty >= result2.penalty ? result : result2;
         const betterRoll = result.penalty >= result2.penalty ? roll : roll2;
         set({
           diceResult: { value: betterRoll, narrative: betterResult.narrative, penalty: betterResult.penalty },
           diceRolled: true, isDiceRolling: false, doubleDiceActive: false,
+          diceHistory: [
+            ...get().diceHistory,
+            {
+              eventId: crisis.id,
+              eventTitle: crisis.title,
+              value: betterRoll,
+              penalty: betterResult.penalty,
+              source: "double_dice",
+              createdAt: Date.now(),
+            },
+          ],
         });
       } else {
         set({
           diceResult: { value: roll, narrative: result.narrative, penalty: result.penalty },
           diceRolled: true, isDiceRolling: false,
+          diceHistory: [
+            ...get().diceHistory,
+            {
+              eventId: crisis.id,
+              eventTitle: crisis.title,
+              value: roll,
+              penalty: result.penalty,
+              source: diceHistory.length === latestDiceHistory.length ? "normal" : "reroll_item",
+              createdAt: Date.now(),
+            },
+          ],
         });
       }
     }, 1500);
@@ -1218,6 +1330,8 @@ export const useGameStore = create<GameState>((set, get) => ({
           revenueEntry,
         ],
         branchContexts: [...branchContexts, branchContext],
+        currentFollowUpTask: null,
+        currentFollowUpData: null,
         pendingRevenueEntry: null,
         numericChangeLog: [...get().numericChangeLog, ...changes],
       });
@@ -1238,7 +1352,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   generateDecisionOptions: async () => {
-    const { chatMessages, currentTask, finalAnswer, apiKey, isDecisionOptionsLoading } = get();
+    const { chatMessages, currentTask, currentEvent, currentFollowUpTask, currentFollowUpData, finalAnswer, apiKey, isDecisionOptionsLoading } = get();
     if (isDecisionOptionsLoading) return;
 
     set({ isDecisionOptionsLoading: true, aiDecisionOptions: null, decisionOptionsNotice: null });
@@ -1261,6 +1375,12 @@ export const useGameStore = create<GameState>((set, get) => ({
             `${i + 1}. ${o.title}：${o.description}`
           ).join("\n");
         }
+      } else if (currentFollowUpTask) {
+        taskTitle = currentEvent?.title || "后续任务";
+        taskChallenge = [
+          currentFollowUpTask,
+          currentFollowUpData ? `参考资料：${currentFollowUpData}` : "",
+        ].filter(Boolean).join("\n");
       }
 
       const controller = new AbortController();
@@ -1295,7 +1415,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         });
       } else if (data.options && Array.isArray(data.options) && data.options.length > 0) {
         // Merge AI-generated options with hardcoded trait changes if available
-        const currentOptions = (currentTask as Record<string, unknown>).decisionOptions as DecisionOption[] | undefined;
+        const currentOptions = currentTask?.type === "main"
+          ? (currentTask as Record<string, unknown>).decisionOptions as DecisionOption[] | undefined
+          : undefined;
         const mergedOptions = data.options.map((aiOpt: DecisionOption, i: number) => {
           // If there's a matching hardcoded option, merge its traitChanges
           const hardcodedOpt = currentOptions?.[i];
@@ -1524,6 +1646,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       decisionOptionPhase: false, settlementAfterOption: false, selectedDecisionOption: null,
       aiDecisionOptions: null, decisionOptionsNotice: null, decisionOptionsGeneratedAssistantCount: 0, isDecisionOptionsLoading: false, consequenceRevealed: false,
       revenue: 0, revenueHistory: [], pendingRevenueEntry: null, numericChangeLog: [], branchContexts: [],
+      eventHistory: [],
+      diceHistory: [],
       reviewReport: null, isReviewLoading: false, reviewedCheckpointId: null,
       finalReport: null, isFinalReportLoading: false,
     });
@@ -1542,10 +1666,23 @@ function applyStep(step: RouteStep, set: (partial: Partial<GameState>) => void, 
       break;
 
     case "trigger": {
-      const { skipNextCrisis } = get();
-      const eventCard = drawEventCard(step.trigger);
+      const { skipNextCrisis, eventHistory } = get();
+      const eventCard = drawEventCard(step.trigger, eventHistory);
       if (skipNextCrisis && eventCard.type === "crisis") {
-        set({ skipNextCrisis: false, currentStepIndex: get().currentStepIndex + 1 });
+        set({
+          skipNextCrisis: false,
+          currentStepIndex: get().currentStepIndex + 1,
+          eventHistory: [
+            ...eventHistory,
+            {
+              triggerId: step.id,
+              eventId: eventCard.id,
+              eventType: "skipped_crisis",
+              title: eventCard.title,
+              createdAt: Date.now(),
+            },
+          ],
+        });
         get().proceedToNextStep();
         return;
       }
@@ -1553,6 +1690,16 @@ function applyStep(step: RouteStep, set: (partial: Partial<GameState>) => void, 
         currentTask: step, currentEvent: eventCard, chatMessages: [], finalAnswer: "",
         rerollCount: 0, currentScore: null, judgeError: null,
         chatWaitStage: "idle", chatError: null,
+        eventHistory: [
+          ...eventHistory,
+          {
+            triggerId: step.id,
+            eventId: eventCard.id,
+            eventType: eventCard.type,
+            title: eventCard.title,
+            createdAt: Date.now(),
+          },
+        ],
       });
       if (eventCard.type === "crisis") {
         set({ subPhase: "crisis", diceResult: null, diceRolled: false, mitigated: false });
@@ -1648,6 +1795,8 @@ if (typeof window !== "undefined") {
       pendingRevenueEntry: state.pendingRevenueEntry,
       numericChangeLog: state.numericChangeLog,
       branchContexts: state.branchContexts,
+      eventHistory: state.eventHistory,
+      diceHistory: state.diceHistory,
       reviewReport: state.reviewReport,
       reviewedCheckpointId: state.reviewedCheckpointId,
       finalReport: state.finalReport,

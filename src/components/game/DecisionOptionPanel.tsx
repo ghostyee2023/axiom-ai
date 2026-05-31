@@ -89,6 +89,7 @@ export default function DecisionOptionPanel() {
   const isOptionSelected = selectedDecisionOption !== null;
   const assistantReplyCount = chatMessages.filter((m) => m.role === "assistant").length;
   const hasNewAssistantOutput = assistantReplyCount > decisionOptionsGeneratedAssistantCount;
+  const decisionContext = buildDecisionContext(currentTask);
 
   return (
     <div
@@ -115,13 +116,17 @@ export default function DecisionOptionPanel() {
               回看 AI 对话
             </button>
           </div>
-          <p className="text-xs sm:text-sm text-white/50">
-            {isDecisionOptionsLoading
-              ? "AI 外援正在把对话整理成行动卡。"
-              : decisionOptionsNotice
-                ? "还没有形成可执行行动卡。"
-                : "AI 外援已把对话整理成行动卡。现在，由你决定真正执行哪一张。"}
-          </p>
+          <div className="mx-auto max-w-2xl space-y-2">
+            <p className="text-xs sm:text-sm text-white/50">
+              {isDecisionOptionsLoading
+                ? "AI 外援正在把对话整理成行动卡。"
+                : decisionOptionsNotice
+                  ? "还没有形成可执行行动卡。"
+                  : decisionContext
+                    ? `为了解决「${decisionContext}」，你需要选择一张真正执行的行动卡。`
+                    : "AI 外援已把对话整理成行动卡。现在，由你决定真正执行哪一张。"}
+            </p>
+          </div>
           {isDecisionOptionsLoading && (
             <div
               className="mx-auto mt-5 max-w-sm rounded-2xl px-4 py-5"
@@ -425,6 +430,16 @@ function ValuePill({ label, value }: { label: string; value: string }) {
       <div className="mt-0.5 text-[11px] font-semibold" style={{ color: tone.text }}>{value}</div>
     </div>
   );
+}
+
+function buildDecisionContext(currentTask: ReturnType<typeof useGameStore.getState>["currentTask"]) {
+  if (!currentTask || currentTask.type !== "main") return "";
+  const record = currentTask as Record<string, unknown>;
+  const challenge = record.challenge ? String(record.challenge) : currentTask.task || currentTask.description;
+  return challenge
+    .replace(/\s+/g, " ")
+    .replace(/[。；;]\s*$/, "")
+    .slice(0, 88);
 }
 
 function getLevelTone(value: string) {

@@ -69,9 +69,10 @@ interface Slide {
 
 function parseMarkdownToSlides(markdown: string): Slide[] {
   const slides: Slide[] = [];
+  const cleanedMarkdown = sanitizeReviewMarkdown(markdown);
 
   // Split by ## headings
-  const parts = markdown.split(/^(?=## )/m);
+  const parts = cleanedMarkdown.split(/^(?=## )/m);
 
   for (const part of parts) {
     const trimmed = part.trim();
@@ -88,11 +89,13 @@ function parseMarkdownToSlides(markdown: string): Slide[] {
       content = trimmed.replace(/^##\s+.+\n?/, "").trim();
     } else {
       // Intro section (content before any ## heading)
+      if (isReviewPreamble(trimmed)) continue;
       title = "📋 复盘总览";
       content = trimmed;
     }
 
     content = summarizeSlideContent(content);
+    if (!content) continue;
     const meta = getSectionMeta(title);
 
     slides.push({
@@ -105,10 +108,10 @@ function parseMarkdownToSlides(markdown: string): Slide[] {
   }
 
   // If we only have one slide with no heading, try to create an intro
-  if (slides.length === 0 && markdown.trim()) {
+  if (slides.length === 0 && cleanedMarkdown.trim()) {
     slides.push({
       title: "📋 复盘报告",
-      content: markdown.trim(),
+      content: summarizeSlideContent(cleanedMarkdown),
       icon: BookOpen,
       color: "#8b5cf6",
       gradient: "from-violet-500/20 to-purple-600/10",
@@ -118,11 +121,32 @@ function parseMarkdownToSlides(markdown: string): Slide[] {
   return slides;
 }
 
+function sanitizeReviewMarkdown(markdown: string) {
+  return markdown
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line && !isReviewPreamble(line))
+    .join("\n")
+    .trim();
+}
+
+function isReviewPreamble(line: string) {
+  const normalized = line.replace(/\s+/g, "");
+  return [
+    /^好的[，,。！!]?这是.*?(复盘|报告)/,
+    /^这是.*?(复盘|报告)/,
+    /^以下是.*?(复盘|报告)/,
+    /^下面是.*?(复盘|报告)/,
+    /^为您生成.*?(复盘|报告)/,
+  ].some((pattern) => pattern.test(normalized));
+}
+
 function summarizeSlideContent(content: string) {
   const lines = content
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
+    .filter((line) => !isReviewPreamble(line))
     .map((line) => line.replace(/^[-*]\s+/, "- ").replace(/^\d+[.)、]\s+/, "- "));
 
   const bullets = lines
