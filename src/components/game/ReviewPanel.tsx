@@ -552,22 +552,12 @@ export default function ReviewPanel() {
         {isReviewLoading && !reviewReport ? (
           // Loading state
           <div className="flex flex-col items-center justify-center py-8 sm:py-16">
-            <div className="relative mb-4 sm:mb-6">
-              <div
-                className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center"
-                style={{
-                  background: "linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(139, 92, 246, 0.08))",
-                  border: "1px solid rgba(245, 158, 11, 0.2)",
-                }}
-              >
-                <FileText className="w-5 h-5 sm:w-7 sm:h-7 text-amber-400" />
-              </div>
-              <div className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-400 animate-pulse" />
-              </div>
+            <div className="review-card-loading relative mb-4 sm:mb-6">
+              <FileText className="w-6 h-6 sm:w-7 sm:h-7 text-amber-300" />
+              <Sparkles className="absolute -right-1 -top-1 w-3.5 h-3.5 text-cyan-300 animate-pulse" />
             </div>
-            <p className="text-white/70 text-xs sm:text-sm font-medium mb-2">AI 正在分析你的决策历程...</p>
-            <p className="text-[11px] sm:text-xs text-white/30">这可能需要 10-20 秒；复盘不会影响继续游戏</p>
+            <p className="text-white/72 text-xs sm:text-sm font-bold mb-2">AI 正在生成阶段战报...</p>
+            <p className="text-[11px] sm:text-xs text-white/34">它会提炼关键选择、经营变化和下一阶段风险</p>
             <div className="mt-6 flex items-center gap-1">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400 thinking-dot" />
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400 thinking-dot" />
@@ -685,6 +675,14 @@ export default function ReviewPanel() {
 
                             {/* Title and subtitle */}
                             <div className="flex-1 min-w-0">
+                              <div className="mb-1.5 flex items-center gap-1.5">
+                                <span className="review-slide-badge" style={{ color: currentSlide.color, borderColor: `${currentSlide.color}35`, background: `${currentSlide.color}12` }}>
+                                  战报
+                                </span>
+                                <span className="text-[10px] font-semibold text-white/32">
+                                  阶段战报
+                                </span>
+                              </div>
                               <h3
                                 className="text-sm sm:text-lg font-bold leading-tight"
                                 style={{

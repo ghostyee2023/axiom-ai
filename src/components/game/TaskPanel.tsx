@@ -86,7 +86,6 @@ export default function TaskPanel({
       {currentTask?.type === "main" && subPhase === "task" && (
         <TaskCard
           task={currentTask}
-          onOpenAiAid={onOpenAiAid}
           intelOpen={intelOpen}
           onIntelOpenChange={onIntelOpenChange}
         />
@@ -156,14 +155,6 @@ function CopyButton({ text, className = "" }: { text: string; className?: string
         <Copy className="w-3 h-3 text-muted-foreground" />
       )}
     </button>
-  );
-}
-
-function RoundStep({ label, active }: { label: string; active: boolean }) {
-  return (
-    <div className={`round-step ${active ? "round-step-active" : ""}`}>
-      <span>{label}</span>
-    </div>
   );
 }
 
@@ -391,12 +382,10 @@ function LockedCard({
 
 function TaskCard({
   task,
-  onOpenAiAid,
   intelOpen,
   onIntelOpenChange,
 }: {
   task: MainTask;
-  onOpenAiAid?: () => void;
   intelOpen?: boolean;
   onIntelOpenChange?: (open: boolean) => void;
 }) {
@@ -426,13 +415,6 @@ function TaskCard({
     : "";
   const contract = (task as Record<string, unknown>).contract as ContractData | undefined;
   const displayData = buildDisplayTaskData(task, decisionHistory, branchContexts, taskScores, totalScore);
-  const dataItems = [
-    displayData ? "参考资料" : null,
-    hasHiddenData ? hiddenDataLabel : null,
-    contract ? "合同" : null,
-    "策略锦囊",
-  ].filter(Boolean);
-
   const isAutoData =
     task.data === "（系统将根据你在上一关的选择，自动填充守店方案或转型方案的上下文）" ||
     task.data === "（系统将根据你在上一关的选择，自动填充相关方案的上下文）" ||
@@ -487,19 +469,16 @@ function TaskCard({
 
         <div className="relative">
           <div className="min-w-0">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="mission-card-badge">MISSION</span>
-              <span className="text-[10px] font-semibold text-white/34">经营关卡</span>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="mission-card-badge">任务卡</span>
+              <span className="text-[10px] font-semibold text-white/34">
+                第一步：读懂局面
+              </span>
             </div>
-            <h3 className="text-[22px] sm:text-[21px] font-black text-white leading-[1.22]">{task.title}</h3>
-            <div className="mt-3 grid grid-cols-3 gap-1.5">
-              <RoundStep active label="读局面" />
-              <RoundStep active={false} label="问外援" />
-              <RoundStep active={false} label="出行动卡" />
-            </div>
-            <div className="mt-2 inline-flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 bg-amber-300/[0.08] border border-amber-300/14">
+            <h3 className="text-xl sm:text-[21px] font-black text-white leading-[1.22]">{task.title}</h3>
+            <div className="mt-3 flex items-start gap-1.5 rounded-xl px-3 py-2 bg-amber-300/[0.08] border border-amber-300/14">
               <AlertTriangle className="mt-0.5 w-3.5 h-3.5 shrink-0 text-amber-300" />
-              <span className="text-[12px] leading-relaxed font-semibold text-amber-100">
+              <span className="text-[13px] leading-relaxed font-bold text-amber-100">
                 {taskGoal}
               </span>
             </div>
@@ -511,7 +490,8 @@ function TaskCard({
           objective={(task as Record<string, unknown>).challenge
             ? String((task as Record<string, unknown>).challenge)
             : task.task}
-          objectiveLabel="本关要做"
+          objectiveLabel="你要解决"
+          notice={buildMissionNotice(task)}
         />
       </div>
 
@@ -559,40 +539,6 @@ function TaskCard({
         </div>
       )}
       </section>
-
-      <div
-        className="rounded-3xl p-3.5 sm:p-4 animate-task-card-enter"
-        style={{
-          animationDelay: "220ms",
-          background: "linear-gradient(135deg, rgba(6, 182, 212, 0.055), rgba(139, 92, 246, 0.045))",
-          border: "1px solid rgba(6, 182, 212, 0.14)",
-        }}
-      >
-        <div className="mb-3">
-          <SectionLabel icon={Bot}>操作区</SectionLabel>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
-          <button
-            onClick={() => setShowIntelDrawer(true)}
-            className="rounded-xl px-3 py-2.5 text-left bg-cyan-400/[0.055] border border-cyan-300/12"
-          >
-            <div className="text-xs font-semibold text-cyan-200">打开资料</div>
-            <div className="mt-0.5 text-[10px] text-white/34">
-              {dataItems.join(" / ")}
-            </div>
-          </button>
-          <button
-            onClick={onOpenAiAid}
-            className="lg:hidden rounded-xl px-3 py-2.5 text-left bg-violet-400/[0.06] border border-violet-300/12"
-          >
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-200">
-              <Bot className="w-3.5 h-3.5" />
-              呼叫外援
-            </div>
-            <div className="mt-0.5 text-[10px] text-white/34">追问、推演方案</div>
-          </button>
-        </div>
-      </div>
 
       {showIntelDrawer && (
         <div
@@ -708,6 +654,15 @@ function buildTaskGoal(task: MainTask) {
   if (/团队|员工|招聘|排班/.test(text)) return "把人手问题拆成职责、排班、训练和交付标准。";
   if (/复盘|最终|实施计划|计划/.test(text)) return "把已有选择转成阶段计划，明确里程碑、资源和风险预案。";
   return "把问题、约束、行动和验证方式说清楚，再提交方案。";
+}
+
+function buildMissionNotice(task: MainTask) {
+  const text = `${task.description} ${task.challenge} ${task.data || ""}`;
+  if (/合同|条款|违约|账期|供应商|合作/.test(text)) return "不要只看眼前价格，重点核对付款、违约、退出和责任边界。";
+  if (/现金|资金|贷款|回本|投资|租金|补贴/.test(text)) return "先算现金流，再判断最坏情况下能撑多久。";
+  if (/竞争|客流|营销|会员|社群|曝光/.test(text)) return "不要只追求热闹，要提前定义验证指标。";
+  if (/库存|货架|供应|采购|缺货/.test(text)) return "先确认库存、周转和替代方案，避免单点依赖。";
+  return "把目标、约束、风险和验证方式问清楚，再生成行动卡。";
 }
 
 function buildImpactTags(text: string) {
@@ -905,18 +860,20 @@ function MissionInfo({
   background,
   objective,
   objectiveLabel,
+  notice,
 }: {
   tone: "main" | "danger" | "opportunity";
   conclusion?: string;
   background: string;
   objective?: string;
   objectiveLabel: string;
+  notice?: string;
 }) {
   const color = tone === "danger" ? "#f87171" : tone === "opportunity" ? "#34d399" : "#fbbf24";
 
   return (
     <div className="mt-4 relative divide-y divide-white/8 border-y border-white/8">
-      <MissionInfoRow label="背景" icon={ClipboardList} color="#a5b4fc">
+      <MissionInfoRow label="当前局面" icon={ClipboardList} color="#a5b4fc">
         {conclusion && <p className="mb-1.5 text-sm font-bold text-white/88">{conclusion}</p>}
         <p className="text-sm leading-[1.72] text-white/66">
           <HighlightNumbers text={background} />
@@ -927,6 +884,14 @@ function MissionInfo({
         <MissionInfoRow label={objectiveLabel} icon={AlertTriangle} color={color}>
           <p className="text-white/86 text-sm leading-[1.72]">
             <HighlightNumbers text={objective} />
+          </p>
+        </MissionInfoRow>
+      )}
+
+      {notice && (
+        <MissionInfoRow label="必须注意" icon={Shield} color="#67e8f9">
+          <p className="text-white/70 text-sm leading-[1.72]">
+            <HighlightNumbers text={notice} />
           </p>
         </MissionInfoRow>
       )}
@@ -981,14 +946,14 @@ function CrisisEventCard({ event }: { event: CrisisCard }) {
   return (
     <div className="flex flex-col gap-2.5">
       <div
-        className="rounded-xl p-4 space-y-3 animate-task-card-enter relative overflow-hidden"
+        className="event-card event-card-crisis rounded-xl p-4 space-y-3 animate-task-card-enter relative overflow-hidden"
         style={{
           animationDelay: "0ms",
-          background: "linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(249, 115, 22, 0.05))",
           border: "1px solid rgba(239, 68, 68, 0.25)",
           boxShadow: "0 0 20px rgba(239, 68, 68, 0.06)",
         }}
       >
+        <div className="event-card-sheen" />
         {/* Left accent border - red/orange danger gradient */}
         <div className="absolute left-0 top-0 bottom-0 w-[4px] rounded-l-xl"
           style={{ background: "linear-gradient(180deg, #ef4444, #f97316)" }}
@@ -997,6 +962,11 @@ function CrisisEventCard({ event }: { event: CrisisCard }) {
         <div className="absolute top-0 right-0 w-24 h-24 opacity-10"
           style={{ background: "radial-gradient(circle at top right, rgba(239, 68, 68, 0.5), transparent 70%)" }}
         />
+
+        <div className="relative mb-1 flex items-center gap-2">
+          <span className="event-card-badge event-card-badge-crisis">危机卡</span>
+          <span className="text-[10px] font-semibold text-red-100/40">突发挑战</span>
+        </div>
 
         <div className="flex items-center gap-2 relative">
           <Shield className="w-5 h-5 text-red-400 animate-icon-pulse" />
@@ -1068,14 +1038,14 @@ function OpportunityEventCard({ event, onOpenAiAid }: { event: OpportunityCard; 
   return (
     <>
     <div
-      className="rounded-xl p-4 space-y-3 animate-task-card-enter relative overflow-hidden"
+      className="event-card event-card-opportunity rounded-xl p-4 space-y-3 animate-task-card-enter relative overflow-hidden"
       style={{
         animationDelay: "0ms",
-        background: "linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(52, 211, 153, 0.04))",
         border: "1px solid rgba(16, 185, 129, 0.22)",
         boxShadow: "0 0 20px rgba(16, 185, 129, 0.06)",
       }}
     >
+      <div className="event-card-sheen" />
       {/* Left accent border - emerald sparkle gradient */}
       <div className="absolute left-0 top-0 bottom-0 w-[4px] rounded-l-xl"
         style={{ background: "linear-gradient(180deg, #10b981, #34d399, #10b981)" }}
@@ -1084,6 +1054,11 @@ function OpportunityEventCard({ event, onOpenAiAid }: { event: OpportunityCard; 
       <div className="absolute top-0 right-0 w-24 h-24 opacity-10"
         style={{ background: "radial-gradient(circle at top right, rgba(16, 185, 129, 0.5), transparent 70%)" }}
       />
+
+      <div className="relative mb-1 flex items-center gap-2">
+        <span className="event-card-badge event-card-badge-opportunity">机会卡</span>
+        <span className="text-[10px] font-semibold text-emerald-100/40">经营机会</span>
+      </div>
 
       <div className="flex items-center gap-2 relative">
         <Star className="w-5 h-5 text-emerald-400 animate-icon-pulse" />
@@ -1102,9 +1077,9 @@ function OpportunityEventCard({ event, onOpenAiAid }: { event: OpportunityCard; 
         <FollowUpTaskCard />
       )}
 
-      <div className="flex items-center gap-3 text-xs relative">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-xs relative">
         {event.reward.decisionCoins && (
-          <span className="px-2 py-0.5 rounded-md font-semibold"
+          <span className="event-reward-chip"
             style={{
               background: "rgba(245, 158, 11, 0.1)",
               color: "#fbbf24",
@@ -1115,7 +1090,7 @@ function OpportunityEventCard({ event, onOpenAiAid }: { event: OpportunityCard; 
           </span>
         )}
         {event.reward.score && (
-          <span className="px-2 py-0.5 rounded-md font-semibold"
+          <span className="event-reward-chip"
             style={{
               background: "rgba(245, 158, 11, 0.1)",
               color: "#fbbf24",
@@ -1126,7 +1101,7 @@ function OpportunityEventCard({ event, onOpenAiAid }: { event: OpportunityCard; 
           </span>
         )}
         {event.reward.item && (
-          <span className="px-2 py-0.5 rounded-md font-semibold"
+          <span className="event-reward-chip"
             style={{
               background: "rgba(16, 185, 129, 0.1)",
               color: "#6ee7b7",

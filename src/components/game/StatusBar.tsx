@@ -2,7 +2,7 @@
 
 import { useGameStore } from "@/store/gameStore";
 import { scenarioData } from "@/data/scenario";
-import { Coins, Package, Trophy, MapPin, TrendingUp, History, X, Zap } from "lucide-react";
+import { Coins, Package, Trophy, MapPin, TrendingUp, History, X, Zap, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import type { NumericChangeType } from "@/store/gameStore";
 
@@ -16,6 +16,7 @@ function getCurrentRoute(roleId: string | null) {
 export default function StatusBar() {
   const [showLog, setShowLog] = useState(false);
   const [ledgerFilter, setLedgerFilter] = useState<LedgerFilter>("all");
+  const [expanded, setExpanded] = useState(false);
   const decisionCoins = useGameStore((s) => s.decisionCoins);
   const inventory = useGameStore((s) => s.inventory);
   const totalScore = useGameStore((s) => s.totalScore);
@@ -31,17 +32,8 @@ export default function StatusBar() {
 
   const route = getCurrentRoute(selectedRole?.id || null);
 
-  let mainTaskCount = 0;
-  for (let i = 0; i < currentStepIndex; i++) {
-    if (route[i].type === "main") mainTaskCount++;
-  }
-  const totalMainTasks = route.filter((r) => r.type === "main").length;
   const currentStep = route[currentStepIndex];
   const progress = Math.round(((currentStepIndex + 1) / route.length) * 100);
-  const currentMainTaskNumber = Math.min(
-    mainTaskCount + (currentStep?.type === "main" ? 1 : 0),
-    totalMainTasks
-  );
   const latestChange = numericChangeLog[numericChangeLog.length - 1];
   const ledgerLabels: Record<LedgerFilter, string> = {
     all: "全部变更",
@@ -61,44 +53,38 @@ export default function StatusBar() {
   };
 
   return (
-    <div className="relative rounded-2xl px-3 py-3 sm:px-5 sm:py-4 overflow-hidden"
+    <div className="relative rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 overflow-hidden"
       style={{
         background: "linear-gradient(135deg, rgba(10, 14, 26, 0.86), rgba(26, 16, 64, 0.5))",
         border: "1px solid rgba(139, 92, 246, 0.18)",
         boxShadow: "0 18px 50px rgba(0,0,0,0.16)",
       }}
     >
-      <div className="mb-3 relative">
-        <div className="flex items-center justify-between gap-3 mb-2.5">
-          <div className="min-w-0">
-            <SectionHeader icon={MapPin}>任务总览</SectionHeader>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-white font-bold tabular-nums text-base sm:text-lg">
-                {currentStepIndex + 1}/{route.length}
+      <div className="relative">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <SectionHeader icon={MapPin}>进度</SectionHeader>
+            <span className="text-white/72 font-bold tabular-nums text-sm sm:text-base">
+              {currentStepIndex + 1}/{route.length}
+            </span>
+            {currentStep?.type !== "main" && (
+              <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-white/45">
+                {currentStep?.type === "trigger"
+                  ? "事件"
+                  : currentStep?.type === "checkpoint"
+                    ? "阶段结算"
+                    : "流程"}
               </span>
-              <span className="text-[11px] text-white/45">
-                {currentStep?.type === "main"
-                  ? `主线 ${currentMainTaskNumber}/${totalMainTasks}`
-                  : currentStep?.type === "trigger"
-                    ? "事件"
-                    : currentStep?.type === "checkpoint"
-                      ? "阶段结算"
-                      : "流程"}
-              </span>
-            </div>
+            )}
           </div>
-          <div className="text-right shrink-0">
-            <div className="text-[11px] text-white/38">完成度</div>
-            <div className="text-xl sm:text-2xl font-black tabular-nums"
-              style={{
-                background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              {progress}%
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[11px] font-bold text-white/58 transition hover:text-white/85"
+          >
+            {progress}%
+            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
         </div>
 
         <div className="w-full h-2 rounded-full overflow-hidden"
@@ -109,16 +95,17 @@ export default function StatusBar() {
             style={{ width: `${progress}%` }}
           />
         </div>
-
       </div>
 
       {/* Stats Row - mobile: smaller, wrapping */}
+      {expanded && (
+      <div className="mt-2.5 animate-expand">
       <div className="flex items-center gap-1.5 sm:gap-2 relative flex-wrap">
         {/* Score */}
         <button
           onClick={() => openLedger("score")}
           className="flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-md hover:scale-[1.02] active:scale-[0.98] transition-transform"
-          title="查看积分变更记录"
+          title="查看决策力变更记录"
           style={{
             background: "rgba(245, 158, 11, 0.08)",
             border: "1px solid rgba(245, 158, 11, 0.15)",
@@ -202,7 +189,7 @@ export default function StatusBar() {
           </div>
         )}
 
-        {latestChange && (
+        {latestChange && false && (
           <button
             onClick={() => {
               setLedgerFilter("all");
@@ -221,6 +208,14 @@ export default function StatusBar() {
           </button>
         )}
       </div>
+      <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+        <ResourceHint label="决策力" value="AI 协作评分" />
+        <ResourceHint label="营收" value="经营结果" />
+        <ResourceHint label="决策币" value="解锁资料/重做" />
+        <ResourceHint label="道具" value="临时能力" />
+      </div>
+      </div>
+      )}
 
       {showLog && (
         <div
@@ -327,6 +322,15 @@ export default function StatusBar() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ResourceHint({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-white/7 bg-white/[0.03] px-2 py-1.5">
+      <div className="text-[10px] font-bold text-white/58">{label}</div>
+      <div className="mt-0.5 text-[10px] text-white/34">{value}</div>
     </div>
   );
 }

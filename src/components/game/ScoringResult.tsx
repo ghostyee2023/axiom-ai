@@ -24,6 +24,7 @@ import {
   TrendingUp,
   Trophy,
 } from "lucide-react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -46,6 +47,7 @@ function getDimColor(name: string): string {
 }
 
 export default function ScoringResult() {
+  const [showScoreDetail, setShowScoreDetail] = useState(false);
   const currentScore = useGameStore((s) => s.currentScore);
   const continueAfterScoring = useGameStore((s) => s.continueAfterScoring);
   const currentEvent = useGameStore((s) => s.currentEvent);
@@ -102,7 +104,7 @@ export default function ScoringResult() {
         <div className="flex items-center justify-center gap-2 mb-1">
           <Trophy className="w-5 h-5 text-amber-400" />
           <h3 className="text-lg font-bold gradient-text">
-            {settlementAfterOption ? "本回合结算" : "AI评估结果"}
+            {settlementAfterOption ? "本回合结算" : "AI 评估结果"}
           </h3>
           <Trophy className="w-5 h-5 text-amber-400" />
         </div>
@@ -113,91 +115,94 @@ export default function ScoringResult() {
         tone={battleReport.tone}
         subtitle={battleReport.subtitle}
         score={currentScore.weightedTotal}
+        scores={currentScore.scores}
         revenue={latestRevenue?.revenue ?? null}
         cumulative={latestRevenue?.cumulative ?? null}
         impacts={recentImpact}
       />
 
-      {/* Radar Chart - Violet/Purple theme */}
-      <div className="w-full h-44 sm:h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
-            <PolarGrid stroke="rgba(139, 92, 246, 0.12)" />
-            <PolarAngleAxis
-              dataKey="dimension"
-              tick={{ fill: "#94a3b8", fontSize: 11 }}
-            />
-            <PolarRadiusAxis
-              angle={90}
-              domain={[0, 10]}
-              tick={{ fill: "#64748b", fontSize: 9 }}
-              axisLine={false}
-            />
-            <Radar
-              name="评分"
-              dataKey="score"
-              stroke="#8b5cf6"
-              fill="#8b5cf6"
-              fillOpacity={0.25}
-              strokeWidth={2}
-            />
-          </RadarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Dimension Score Bars */}
-      <div className="space-y-2.5">
-        {Object.entries(currentScore.scores).map(([name, value], index) => {
-          const color = getDimColor(name);
-          const pct = (value / 10) * 100;
-          return (
-            <div
-              key={name}
-              className="animate-fade-in-up"
-              style={{ animationDelay: `${0.1 + index * 0.08}s` }}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-white/70 font-medium">{name}</span>
-                <span
-                  className="text-sm font-bold animate-score-reveal"
-                  style={{
-                    color,
-                    animationDelay: `${0.3 + index * 0.1}s`,
-                  }}
-                >
-                  {value}
-                </span>
-              </div>
-              <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                <div
-                  className="h-full rounded-full score-bar-animate"
-                  style={{
-                    ["--target-width" as string]: `${pct}%`,
-                    background: `linear-gradient(90deg, ${color}, ${color}88)`,
-                  }}
-                />
-              </div>
+      <div className="rounded-xl border border-white/8 bg-white/[0.035] overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowScoreDetail((value) => !value)}
+          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left"
+        >
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-white/78">AI 决策力评分</div>
+            <div className="mt-0.5 text-xs text-white/38">
+              {showScoreDetail ? "收起五项能力细节" : "展开查看目标、业务、约束、追问和落地能力"}
             </div>
-          );
-        })}
-      </div>
+          </div>
+          <div className="shrink-0 rounded-lg px-2.5 py-1 text-sm font-black text-amber-200 bg-amber-300/10 border border-amber-300/16">
+            {currentScore.weightedTotal}分
+          </div>
+        </button>
 
-      {/* Total Score - Large and Gold */}
-      <div className="text-center py-2 sm:py-3 relative">
-        {/* Decorative line */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
+        {showScoreDetail && (
+          <div className="border-t border-white/8 p-3 animate-expand">
+            <div className="w-full h-40 sm:h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+                  <PolarGrid stroke="rgba(139, 92, 246, 0.12)" />
+                  <PolarAngleAxis
+                    dataKey="dimension"
+                    tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  />
+                  <PolarRadiusAxis
+                    angle={90}
+                    domain={[0, 10]}
+                    tick={{ fill: "#64748b", fontSize: 9 }}
+                    axisLine={false}
+                  />
+                  <Radar
+                    name="评分"
+                    dataKey="score"
+                    stroke="#8b5cf6"
+                    fill="#8b5cf6"
+                    fillOpacity={0.25}
+                    strokeWidth={2}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
 
-        <div className="text-xs text-white/50 mb-2 font-medium tracking-wider uppercase">
-          {settlementAfterOption ? "📌 决策质量得分" : currentEvent?.type === "crisis" ? "⚔️ 危机应对得分" : "🎯 任务得分"}
-        </div>
-        <div className="animate-score-reveal" style={{ animationDelay: "0.5s" }}>
-          <span className="text-3xl sm:text-4xl font-black gradient-text-gold">
-            {currentScore.weightedTotal}
-          </span>
-          <span className="text-sm font-normal text-white/40 ml-1.5">分</span>
-        </div>
-
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-24 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
+            <div className="space-y-2.5">
+              {Object.entries(currentScore.scores).map(([name, value], index) => {
+                const color = getDimColor(name);
+                const pct = (value / 10) * 100;
+                return (
+                  <div
+                    key={name}
+                    className="animate-fade-in-up"
+                    style={{ animationDelay: `${0.1 + index * 0.08}s` }}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-white/70 font-medium">{name}</span>
+                      <span
+                        className="text-sm font-bold animate-score-reveal"
+                        style={{
+                          color,
+                          animationDelay: `${0.3 + index * 0.1}s`,
+                        }}
+                      >
+                        {value}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full score-bar-animate"
+                        style={{
+                          ["--target-width" as string]: `${pct}%`,
+                          background: `linear-gradient(90deg, ${color}, ${color}88)`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Revenue Result for this task */}
@@ -481,6 +486,7 @@ function BattleReport({
   subtitle,
   tone,
   score,
+  scores,
   revenue,
   cumulative,
   impacts,
@@ -489,6 +495,7 @@ function BattleReport({
   subtitle: string;
   tone: "growth" | "danger" | "stable";
   score: number;
+  scores: Record<string, number>;
   revenue: number | null;
   cumulative: number | null;
   impacts: ReturnType<typeof useGameStore.getState>["numericChangeLog"];
@@ -497,6 +504,7 @@ function BattleReport({
   const toneIcon = tone === "growth" ? ArrowUpRight : tone === "danger" ? ArrowDownRight : Gauge;
   const ToneIcon = toneIcon;
   const coinChange = impacts.find((entry) => entry.type === "coins");
+  const ability = buildAbilityBadges(scores);
 
   return (
     <div className={`battle-report battle-report-${tone}`}>
@@ -535,6 +543,55 @@ function BattleReport({
             icon={Coins}
           />
         </div>
+
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <AbilityBadge
+            label="本关亮点"
+            name={ability.strongest.name}
+            value={ability.strongest.value}
+            tone="good"
+          />
+          <AbilityBadge
+            label="待补短板"
+            name={ability.weakest.name}
+            value={ability.weakest.value}
+            tone="warn"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildAbilityBadges(scores: Record<string, number>) {
+  const entries = Object.entries(scores);
+  const fallback = { name: "决策表达", value: 0 };
+  if (entries.length === 0) return { strongest: fallback, weakest: fallback };
+  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
+  return {
+    strongest: { name: sorted[0][0], value: sorted[0][1] },
+    weakest: { name: sorted[sorted.length - 1][0], value: sorted[sorted.length - 1][1] },
+  };
+}
+
+function AbilityBadge({
+  label,
+  name,
+  value,
+  tone,
+}: {
+  label: string;
+  name: string;
+  value: number;
+  tone: "good" | "warn";
+}) {
+  const color = tone === "good" ? "#6ee7b7" : "#fcd34d";
+  return (
+    <div className={`ability-badge ability-badge-${tone}`}>
+      <div className="text-[10px] font-bold text-white/38">{label}</div>
+      <div className="mt-0.5 flex items-center justify-between gap-2">
+        <span className="text-xs font-black truncate" style={{ color }}>{name}</span>
+        <span className="text-xs font-black tabular-nums" style={{ color }}>{value}</span>
       </div>
     </div>
   );

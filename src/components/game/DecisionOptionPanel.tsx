@@ -16,6 +16,8 @@ import {
   MessageCircle,
   AlertCircle,
   X,
+  Layers3,
+  Hourglass,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -128,21 +130,7 @@ export default function DecisionOptionPanel() {
             </p>
           </div>
           {isDecisionOptionsLoading && (
-            <div
-              className="mx-auto mt-5 max-w-sm rounded-2xl px-4 py-5"
-              style={{
-                background: "rgba(139, 92, 246, 0.08)",
-                border: "1px solid rgba(139, 92, 246, 0.18)",
-              }}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 text-violet-300 animate-spin" />
-                <span className="text-sm text-violet-200/80">生成方案中...</span>
-              </div>
-              <p className="mt-2 text-xs text-white/38">
-                方案卡生成完成后才会展示。
-              </p>
-            </div>
+            <ActionCardLoading />
           )}
         </div>
 
@@ -177,11 +165,31 @@ export default function DecisionOptionPanel() {
 
         {/* Cards */}
         {!isDecisionOptionsLoading && options.length > 0 && (
+        <>
+        <div className="action-deck-status mb-3 flex items-center justify-between gap-3 rounded-2xl px-3 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="action-deck-stack" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="min-w-0 text-left">
+              <div className="text-xs font-black text-white/84">
+                {decisionContext ? `处理：${decisionContext}` : "选择本轮行动"}
+              </div>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold text-cyan-100 bg-cyan-400/10 border border-cyan-300/16">
+            <Layers3 className="w-3.5 h-3.5" />
+            {isOptionSelected ? "已锁定" : `选 1 / ${options.length}`}
+          </div>
+        </div>
         <div className="flex sm:grid sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory custom-scrollbar pb-2 sm:pb-0">
           {options.map((option, index) => {
             const accent = cardAccents[index % cardAccents.length];
             const isSelected = selectedDecisionOption?.id === option.id;
             const isOtherSelected = isOptionSelected && !isSelected;
+            const structuredOption = structureOptionDescription(option.description);
 
             return (
               <button
@@ -235,14 +243,14 @@ export default function DecisionOptionPanel() {
                 <div className="relative p-3 sm:p-5">
                   <div className="mb-2 flex items-center gap-1.5">
                     <span
-                      className="rounded-full px-2 py-0.5 text-[10px] font-black tracking-[0.12em]"
+                      className="rounded-full px-2 py-0.5 text-[10px] font-black tracking-normal"
                       style={{
                         background: accent.badge,
                         border: `1px solid ${accent.badgeBorder}`,
                         color: accent.text,
                       }}
                     >
-                      ACTION
+                      行动卡
                     </span>
                     <span className="text-[10px] font-semibold text-white/32">
                       {getCardArchetype(option)}
@@ -269,10 +277,12 @@ export default function DecisionOptionPanel() {
                     {option.title}
                   </h3>
 
-                  {/* Description - this is all the player sees before choosing */}
-                  <p className="text-xs sm:text-sm text-white/70 mb-3 sm:mb-4 leading-relaxed">
-                    {option.description}
-                  </p>
+                  <div className="mb-3 sm:mb-4 space-y-2">
+                    <OptionFact label="具体动作" value={structuredOption.action} />
+                    {structuredOption.condition && (
+                      <OptionFact label="适用条件" value={structuredOption.condition} muted />
+                    )}
+                  </div>
 
                   {!isSelected && (
                     <div className="grid grid-cols-3 gap-1.5 mb-3">
@@ -357,15 +367,26 @@ export default function DecisionOptionPanel() {
                   {/* Selected check overlay */}
                   {isSelected && !consequenceRevealed && (
                     <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-[1px]" />
                       <div
-                        className="w-16 h-16 rounded-full flex items-center justify-center animate-bounce-in"
+                        className="relative w-20 h-20 rounded-full flex flex-col items-center justify-center animate-bounce-in"
                         style={{
                           background: `linear-gradient(135deg, ${accent.glow}, ${accent.badge})`,
                           border: `2px solid ${accent.borderHover}`,
                         }}
                       >
                         <Check className="w-8 h-8" style={{ color: accent.text }} />
+                        <span className="mt-0.5 text-[10px] font-bold" style={{ color: accent.text }}>
+                          已出牌
+                        </span>
                       </div>
+                    </div>
+                  )}
+
+                  {isSelected && consequenceRevealed && (
+                    <div className="mt-3 flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white/62 bg-white/[0.045] border border-white/8">
+                      <Hourglass className="w-3.5 h-3.5 text-cyan-300 animate-pulse" />
+                      经营结果正在结算...
                     </div>
                   )}
                 </div>
@@ -373,6 +394,7 @@ export default function DecisionOptionPanel() {
             );
           })}
         </div>
+        </>
         )}
 
       </div>
@@ -449,6 +471,36 @@ function ValuePill({ label, value }: { label: string; value: string }) {
   );
 }
 
+function OptionFact({ label, value, muted = false }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.035] px-2.5 py-2">
+      <div className="mb-1 text-[10px] font-bold text-white/34">{label}</div>
+      <p className={`text-xs sm:text-sm leading-relaxed ${muted ? "text-white/52" : "text-white/76"}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ActionCardLoading() {
+  return (
+    <div className="mx-auto mt-5 max-w-md rounded-2xl px-4 py-5 action-card-loading">
+      <div className="flex items-center justify-center gap-2">
+        <Loader2 className="w-4 h-4 text-violet-300 animate-spin" />
+        <span className="text-sm font-bold text-violet-100/86">正在抽取行动卡...</span>
+      </div>
+      <div className="mt-4 flex items-center justify-center gap-3" aria-hidden="true">
+        <div className="action-card-back action-card-back-1" />
+        <div className="action-card-back action-card-back-2" />
+        <div className="action-card-back action-card-back-3" />
+      </div>
+      <p className="mt-4 text-xs text-white/42">
+        AI 外援会把对话压缩成可执行的经营选择。
+      </p>
+    </div>
+  );
+}
+
 function buildDecisionContext(currentTask: ReturnType<typeof useGameStore.getState>["currentTask"]) {
   if (!currentTask || currentTask.type !== "main") return "";
   const record = currentTask as Record<string, unknown>;
@@ -457,6 +509,20 @@ function buildDecisionContext(currentTask: ReturnType<typeof useGameStore.getSta
     .replace(/\s+/g, " ")
     .replace(/[。；;]\s*$/, "")
     .slice(0, 88);
+}
+
+function structureOptionDescription(description: string) {
+  const sentences = description
+    .split(/(?<=[。！？；])|(?<=\.)\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  if (sentences.length <= 1) {
+    return { action: description, condition: "" };
+  }
+  return {
+    action: sentences[0],
+    condition: sentences.slice(1).join(""),
+  };
 }
 
 function getLevelTone(value: string) {

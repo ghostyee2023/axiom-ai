@@ -1,7 +1,7 @@
 "use client";
 
 import { useGameStore } from "@/store/gameStore";
-import { Banknote, Package, ShieldAlert, Sparkles, Star, UsersRound, Zap } from "lucide-react";
+import { Banknote, Coins, Gauge, Package, ShieldAlert, Sparkles, Star, TrendingUp, UsersRound, Zap } from "lucide-react";
 
 type StoreMood = "growth" | "pressure" | "stable";
 
@@ -12,6 +12,7 @@ export default function StoreScene() {
   const currentEvent = useGameStore((s) => s.currentEvent);
   const subPhase = useGameStore((s) => s.subPhase);
   const currentTask = useGameStore((s) => s.currentTask);
+  const numericChangeLog = useGameStore((s) => s.numericChangeLog);
 
   const latestRevenue = revenueHistory.at(-1)?.revenue || 0;
   const previousRevenue = revenueHistory.length > 1 ? revenueHistory[revenueHistory.length - 2].revenue : 0;
@@ -23,13 +24,14 @@ export default function StoreScene() {
       : "stable";
   const metrics = buildStoreMetrics(revenue, latestRevenue, totalScore, mood);
   const eventChip = buildEventChip(subPhase, currentEvent?.type, swing);
+  const tickerItems = buildTickerItems(numericChangeLog);
 
   return (
     <section className="store-scene rounded-2xl overflow-hidden border border-white/10">
       <div className={`store-sky store-sky-${mood}`} />
-      <div className="relative z-10 grid grid-cols-[88px_1fr] sm:grid-cols-[124px_1fr] gap-3 sm:gap-4 p-2.5 sm:p-3">
-        <div className="storefront" aria-hidden="true">
-          <div className="storefront-sign">AXIOM</div>
+      <div className="relative z-10 grid grid-cols-[78px_1fr] sm:grid-cols-[104px_1fr] gap-2.5 sm:gap-3 p-2.5 sm:p-3">
+        <div className="storefront store-front-compact" aria-hidden="true">
+          <div className="storefront-sign">小店</div>
           <div className="storefront-awning">
             <span />
             <span />
@@ -69,13 +71,10 @@ export default function StoreScene() {
                 <eventChip.icon className="w-3 h-3" />
                 {eventChip.label}
               </div>
-              <div className={`store-mood-badge store-mood-${mood}`}>
-                {mood === "growth" ? "升温" : mood === "pressure" ? "承压" : "观望"}
-              </div>
             </div>
           </div>
 
-          <div className="mt-2.5 grid grid-cols-2 lg:grid-cols-4 gap-2">
+          <div className="mt-2.5 grid grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2">
             {metrics.map((metric) => (
               <div key={metric.label} className="store-metric">
                 <div className="flex items-center justify-between gap-2">
@@ -99,6 +98,20 @@ export default function StoreScene() {
               </div>
             ))}
           </div>
+          {tickerItems.length > 0 && (
+            <div className="store-ticker mt-2 flex items-center gap-2 overflow-hidden rounded-xl px-2.5 py-1.5">
+              <div className="shrink-0 text-[10px] font-black text-white/42">最近</div>
+              <div className="flex min-w-0 gap-1.5 overflow-x-auto custom-scrollbar">
+                {tickerItems.slice(0, 2).map((item) => (
+                  <div key={item.id} className="store-ticker-chip">
+                    <item.icon className="w-3 h-3" style={{ color: item.color }} />
+                    <span className="truncate">{item.label}</span>
+                    <b style={{ color: item.color }}>{item.value}</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -161,6 +174,40 @@ function buildEventChip(subPhase: string, eventType?: string, swing = 0) {
   if (swing > 800) return { label: "趋势向上", tone: "growth" as const, icon: Zap };
   if (swing < -800) return { label: "趋势下滑", tone: "danger" as const, icon: ShieldAlert };
   return { label: "经营中", tone: "stable" as const, icon: Package };
+}
+
+function buildTickerItems(log: ReturnType<typeof useGameStore.getState>["numericChangeLog"]) {
+  return log.slice(-3).reverse().map((entry) => {
+    const isPositive = entry.delta >= 0;
+    const color = isPositive ? "#6ee7b7" : "#fca5a5";
+    const icon = entry.type === "coins"
+      ? Coins
+      : entry.type === "revenue"
+        ? TrendingUp
+        : entry.type === "score"
+          ? Star
+          : Gauge;
+    return {
+      id: entry.id,
+      icon,
+      color,
+      label: formatTickerLabel(entry.label),
+      value: `${entry.delta > 0 ? "+" : ""}${entry.delta.toLocaleString()}`,
+    };
+  });
+}
+
+function formatTickerLabel(label: string) {
+  const labels: Record<string, string> = {
+    "总分": "决策力",
+    "模拟营收": "营收",
+    "决策币": "决策币",
+    riskAppetite: "风险偏好",
+    dataDependency: "数据意识",
+    collaborationTendency: "协作倾向",
+    innovationLevel: "创新倾向",
+  };
+  return labels[label] || label;
 }
 
 function clamp(value: number) {

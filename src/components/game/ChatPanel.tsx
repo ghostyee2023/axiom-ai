@@ -54,6 +54,7 @@ export default function ChatPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isCrisisAndNotRolled = subPhase === "crisis" && !diceRolled;
+  const advisorProgress = buildAdvisorProgress(chatMessages);
   const quickRefs = buildQuickReferences(
     currentTask,
     unlockedHints,
@@ -151,6 +152,14 @@ export default function ChatPanel({
             {chatMessages.length} 条消息
           </span>
         </div>
+      )}
+
+      {!hideHeader && (
+        <AdvisorStatus
+          progress={advisorProgress}
+          isLoading={isChatLoading}
+          hasError={chatWaitStage === "error"}
+        />
       )}
 
       {/* Messages - scrollable, takes remaining space */}
@@ -355,6 +364,75 @@ function ThinkingCardStrip({ onUse }: { onUse: (card: ThinkingCard) => void }) {
       )}
     </>
   );
+}
+
+function AdvisorStatus({
+  progress,
+  isLoading,
+  hasError,
+}: {
+  progress: ReturnType<typeof buildAdvisorProgress>;
+  isLoading: boolean;
+  hasError: boolean;
+}) {
+  const statusText = hasError
+    ? "外援连接不稳"
+    : isLoading
+      ? "外援正在推演"
+      : progress.ready
+        ? "可以整理行动卡"
+        : "继续补齐判断";
+
+  return (
+    <div className="ai-advisor-status shrink-0 mx-2 mt-2 rounded-xl px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`ai-advisor-dot ${isLoading ? "ai-advisor-dot-live" : ""}`} />
+            <span className="text-xs font-bold text-white/78">{statusText}</span>
+          </div>
+          <div className="mt-1 text-[10px] text-white/34 truncate">
+            {progress.hint}
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[10px] text-white/34">协作度</div>
+          <div className="text-sm font-black text-cyan-200">{progress.percent}%</div>
+        </div>
+      </div>
+      <div className="mt-2 h-1.5 rounded-full bg-white/8 overflow-hidden">
+        <div
+          className="h-full rounded-full ai-advisor-fill"
+          style={{ width: `${progress.percent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function buildAdvisorProgress(messages: ReturnType<typeof useGameStore.getState>["chatMessages"]) {
+  const userCount = messages.filter((message) => message.role === "user").length;
+  const assistantCount = messages.filter((message) => message.role === "assistant").length;
+  const joinedUserText = messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.content)
+    .join("\n");
+  const hasContext = /成本|预算|客户|顾客|时间|人手|库存|合同|现金|风险|目标|数据/.test(joinedUserText);
+  const hasIteration = userCount >= 2 && assistantCount >= 1;
+  const hasActionIntent = /方案|步骤|执行|指标|验证|选择|计划|落地|比较/.test(joinedUserText);
+  const doneCount = [hasContext, hasIteration, hasActionIntent].filter(Boolean).length;
+
+  return {
+    percent: Math.max(8, Math.round((doneCount / 3) * 100)),
+    ready: doneCount >= 2 && assistantCount >= 1,
+    hint: hasActionIntent
+      ? "已经开始靠近行动方案。"
+      : hasIteration
+        ? "继续要求 AI 比较方案和验证指标。"
+        : hasContext
+          ? "已提供背景，下一步让 AI 反问缺口。"
+          : "先告诉 AI 目标、约束和关键事实。",
+  };
 }
 
 type ThinkingCard = {

@@ -273,7 +273,10 @@ export default function GamePage() {
           {/* Floating Decision Panel - Bottom Left */}
           {showDecisionPanel && !aiDrawerVisible && (
             <div className="shrink-0 mt-auto sticky bottom-0 z-30">
-              <DecisionPanel />
+              <DecisionPanel
+                onOpenTaskIntel={() => setTaskIntelOpenForStep(true)}
+                onOpenAiAid={() => setAiDrawerOpenForStep(true)}
+              />
             </div>
           )}
         </div>
@@ -385,7 +388,12 @@ export default function GamePage() {
               </div>
               {showDecisionPanel && (
                 <div className="shrink-0">
-                  <DecisionPanel />
+                  <DecisionPanel
+                    onOpenTaskIntel={() => {
+                      setAiDrawerOpenForStep(false);
+                      setTaskIntelOpenForStep(true);
+                    }}
+                  />
                 </div>
               )}
             </div>

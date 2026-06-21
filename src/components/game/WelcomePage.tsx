@@ -79,7 +79,14 @@ export default function WelcomePage() {
       color: "#06b6d4",
       bg: "rgba(6, 182, 212, 0.15)",
       title: "2. 面对挑战",
-      desc: "每关都有一个核心挑战，通过对话找到解决方案。提交后AI裁判评分。",
+      desc: "阅读任务卡，用 AI 外援补齐背景、约束和风险，再提交你的经营判断。",
+    },
+    {
+      icon: <Sparkles className="w-4 h-4" />,
+      color: "#a78bfa",
+      bg: "rgba(139, 92, 246, 0.15)",
+      title: "3. 打出行动卡",
+      desc: "AI 会把对话整理成行动卡，你选择真正执行的一张，进入本回合结算。",
     },
     {
       icon: <Zap className="w-4 h-4" />,
@@ -99,15 +106,15 @@ export default function WelcomePage() {
       icon: <Coins className="w-4 h-4" />,
       color: "#f59e0b",
       bg: "rgba(245, 158, 11, 0.15)",
-      title: "3. 应对随机事件",
-      desc: "危机卡需要掷骰子+对话应对；机遇卡可自由选择接受或放弃。",
+      title: "4. 应对事件牌",
+      desc: "危机卡用骰子决定冲击强度；机会卡可选择接受或放弃。",
     },
     {
       icon: <Trophy className="w-4 h-4" />,
       color: "#8b5cf6",
       bg: "rgba(139, 92, 246, 0.15)",
-      title: "4. 最终结算",
-      desc: "根据总分获得结局称号和决策风格报告。",
+      title: "5. 查看战报",
+      desc: "每轮会生成经营战报，最终根据决策力、营收和风格获得结局。",
     },
   ];
 

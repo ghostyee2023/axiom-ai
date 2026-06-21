@@ -338,7 +338,7 @@
   color: rgba(255,255,255,0.78);
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   background: linear-gradient(90deg, rgba(139,92,246,0.38), rgba(6,182,212,0.28));
 }
 
@@ -428,6 +428,33 @@
   border: 1px solid rgba(255,255,255,0.08);
 }
 
+.store-ticker {
+  background: rgba(255,255,255,0.038);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+.store-ticker-chip {
+  min-width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.56);
+  background: rgba(10,14,26,0.48);
+  border: 1px solid rgba(255,255,255,0.07);
+  animation: ticker-chip-in 0.42s ease-out both;
+}
+
+.store-ticker-chip b {
+  font-weight: 950;
+}
+
+.store-ticker-chip:nth-child(2) { animation-delay: 0.06s; }
+.store-ticker-chip:nth-child(3) { animation-delay: 0.12s; }
+
 .store-meter-fill {
   animation: store-meter-grow 0.7s ease-out both;
 }
@@ -481,7 +508,112 @@
   to { transform: scaleX(1); transform-origin: left; }
 }
 
+@keyframes ticker-chip-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 /* ===== Action card game feel ===== */
+.action-deck-status {
+  background:
+    radial-gradient(circle at 8% 20%, rgba(6,182,212,0.12), transparent 34%),
+    linear-gradient(135deg, rgba(139,92,246,0.10), rgba(15,23,42,0.62));
+  border: 1px solid rgba(139,92,246,0.15);
+  box-shadow: 0 12px 36px rgba(0,0,0,0.18);
+}
+
+.action-card-loading {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(139,92,246,0.18), transparent 42%),
+    linear-gradient(135deg, rgba(139,92,246,0.09), rgba(6,182,212,0.045));
+  border: 1px solid rgba(139,92,246,0.18);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.20);
+}
+
+.action-card-back {
+  width: 54px;
+  height: 78px;
+  border-radius: 14px;
+  position: relative;
+  background:
+    linear-gradient(145deg, rgba(139,92,246,0.34), rgba(6,182,212,0.14)),
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0 4px, transparent 4px 9px);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.32);
+  overflow: hidden;
+}
+
+.action-card-back::before {
+  content: "AI";
+  position: absolute;
+  inset: 12px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.62);
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0;
+  border: 1px solid rgba(255,255,255,0.13);
+}
+
+.action-card-back::after {
+  content: "";
+  position: absolute;
+  inset: -45%;
+  background: linear-gradient(115deg, transparent 38%, rgba(255,255,255,0.18) 49%, transparent 60%);
+  animation: action-card-back-shine 2.2s ease-in-out infinite;
+}
+
+.action-card-back-1 {
+  transform: rotate(-9deg);
+  animation: action-card-back-float 1.8s ease-in-out infinite;
+}
+
+.action-card-back-2 {
+  transform: translateY(-7px);
+  animation: action-card-back-float 1.8s ease-in-out 0.18s infinite;
+}
+
+.action-card-back-3 {
+  transform: rotate(9deg);
+  animation: action-card-back-float 1.8s ease-in-out 0.36s infinite;
+}
+
+.action-deck-stack {
+  position: relative;
+  width: 34px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.action-deck-stack span {
+  position: absolute;
+  width: 22px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(145deg, rgba(139,92,246,0.34), rgba(6,182,212,0.16));
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.22);
+}
+
+.action-deck-stack span:nth-child(1) {
+  left: 0;
+  transform: rotate(-10deg);
+}
+
+.action-deck-stack span:nth-child(2) {
+  left: 7px;
+  transform: rotate(0deg);
+}
+
+.action-deck-stack span:nth-child(3) {
+  left: 14px;
+  transform: rotate(10deg);
+  animation: deck-card-pulse 2.8s ease-in-out infinite;
+}
+
 .action-card {
   isolation: isolate;
   transform-style: preserve-3d;
@@ -516,9 +648,29 @@
 .action-card-1 { background: linear-gradient(145deg, rgba(8,47,73,0.62), rgba(15,23,42,0.82)); }
 .action-card-2 { background: linear-gradient(145deg, rgba(120,53,15,0.56), rgba(15,23,42,0.82)); }
 
+.action-card:disabled {
+  cursor: default;
+}
+
 @keyframes card-foil-sweep {
   from { transform: translateX(-35%) rotate(8deg); }
   to { transform: translateX(35%) rotate(8deg); }
+}
+
+@keyframes deck-card-pulse {
+  0%, 100% { transform: rotate(10deg) translateY(0); }
+  50% { transform: rotate(10deg) translateY(-3px); }
+}
+
+@keyframes action-card-back-float {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: -6px; }
+}
+
+@keyframes action-card-back-shine {
+  0%, 55%, 100% { transform: translateX(-28%) rotate(8deg); opacity: 0; }
+  70% { opacity: 1; }
+  86% { transform: translateX(28%) rotate(8deg); opacity: 0; }
 }
 
 /* ===== Settlement battle report ===== */
@@ -604,6 +756,54 @@
 .battle-stat:nth-child(2) { animation-delay: 0.08s; }
 .battle-stat:nth-child(3) { animation-delay: 0.16s; }
 
+.ability-badge {
+  border-radius: 13px;
+  padding: 9px 10px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.08);
+  animation: battle-stat-pop 0.48s ease-out 0.22s both;
+}
+
+.ability-badge-good {
+  box-shadow: inset 0 1px 0 rgba(16,185,129,0.08);
+}
+
+.ability-badge-warn {
+  box-shadow: inset 0 1px 0 rgba(245,158,11,0.08);
+}
+
+.review-card-loading {
+  width: 70px;
+  height: 88px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(145deg, rgba(245,158,11,0.20), rgba(139,92,246,0.10)),
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.045) 0 4px, transparent 4px 9px);
+  border: 1px solid rgba(245,158,11,0.22);
+  box-shadow: 0 18px 42px rgba(0,0,0,0.28);
+  animation: review-card-thinking 1.8s ease-in-out infinite;
+}
+
+.review-card-loading::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 13px;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.review-slide-badge {
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0;
+  border: 1px solid;
+}
+
 @keyframes battle-glint {
   0%, 62%, 100% { transform: translateX(-22%) rotate(8deg); opacity: 0; }
   72% { opacity: 1; }
@@ -613,6 +813,11 @@
 @keyframes battle-stat-pop {
   from { opacity: 0; transform: translateY(8px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes review-card-thinking {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-7px) rotate(2deg); }
 }
 
 /* ===== Mission card ===== */
@@ -646,42 +851,113 @@
   padding: 3px 8px;
   font-size: 10px;
   font-weight: 950;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   color: #c4b5fd;
   background: rgba(139, 92, 246, 0.14);
   border: 1px solid rgba(196, 181, 253, 0.18);
 }
 
-.round-step {
-  position: relative;
-  overflow: hidden;
-  border-radius: 9px;
-  padding: 6px 5px;
-  text-align: center;
-  font-size: 10px;
-  font-weight: 800;
-  color: rgba(255,255,255,0.36);
-  background: rgba(255,255,255,0.045);
-  border: 1px solid rgba(255,255,255,0.075);
+/* ===== Event cards ===== */
+.event-card {
+  isolation: isolate;
 }
 
-.round-step-active {
-  color: #c4b5fd;
-  background: rgba(139, 92, 246, 0.13);
-  border-color: rgba(196, 181, 253, 0.18);
-}
-
-.round-step-active::after {
+.event-card::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
-  animation: round-step-scan 2.2s ease-in-out infinite;
+  inset: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  pointer-events: none;
 }
 
-@keyframes round-step-scan {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(100%); }
+.event-card-crisis {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(239,68,68,0.18), transparent 34%),
+    linear-gradient(135deg, rgba(239, 68, 68, 0.11), rgba(249, 115, 22, 0.045));
+}
+
+.event-card-opportunity {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(16,185,129,0.18), transparent 34%),
+    linear-gradient(135deg, rgba(16, 185, 129, 0.11), rgba(52, 211, 153, 0.04));
+}
+
+.event-card-sheen {
+  position: absolute;
+  inset: -35%;
+  background: linear-gradient(115deg, transparent 37%, rgba(255,255,255,0.10) 48%, transparent 59%);
+  transform: translateX(-30%) rotate(8deg);
+  animation: event-card-sheen 6.4s ease-in-out infinite;
+}
+
+.event-card-badge {
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.event-card-badge-crisis {
+  color: #fecaca;
+  background: rgba(239,68,68,0.14);
+  border: 1px solid rgba(252,165,165,0.20);
+}
+
+.event-card-badge-opportunity {
+  color: #a7f3d0;
+  background: rgba(16,185,129,0.14);
+  border: 1px solid rgba(110,231,183,0.20);
+}
+
+.event-reward-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-weight: 850;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+@keyframes event-card-sheen {
+  0%, 68%, 100% { transform: translateX(-30%) rotate(8deg); opacity: 0; }
+  80% { opacity: 1; }
+  92% { transform: translateX(30%) rotate(8deg); opacity: 0; }
+}
+
+/* ===== AI advisor skill meter ===== */
+.ai-advisor-status {
+  background:
+    radial-gradient(circle at 10% 20%, rgba(6,182,212,0.12), transparent 36%),
+    linear-gradient(135deg, rgba(139,92,246,0.10), rgba(15,23,42,0.55));
+  border: 1px solid rgba(139,92,246,0.16);
+}
+
+.ai-advisor-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #67e8f9;
+  box-shadow: 0 0 12px rgba(103,232,249,0.35);
+}
+
+.ai-advisor-dot-live {
+  animation: ai-advisor-pulse 1.2s ease-in-out infinite;
+}
+
+.ai-advisor-fill {
+  background: linear-gradient(90deg, #8b5cf6, #06b6d4, #10b981);
+  box-shadow: 0 0 14px rgba(6,182,212,0.32);
+  transition: width 0.45s ease;
+}
+
+@keyframes ai-advisor-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.72; }
+  50% { transform: scale(1.35); opacity: 1; }
 }
 
 @keyframes mission-card-sheen {

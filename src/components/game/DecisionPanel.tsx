@@ -14,7 +14,13 @@ import { useState } from "react";
  * DecisionPanel - Floating bottom-left panel for final decision conclusion + submit button.
  * Game-like "SUBMIT YOUR DECISION" feel with gradient and glow effects.
  */
-export default function DecisionPanel() {
+export default function DecisionPanel({
+  onOpenTaskIntel,
+  onOpenAiAid,
+}: {
+  onOpenTaskIntel?: () => void;
+  onOpenAiAid?: () => void;
+}) {
   const subPhase = useGameStore((s) => s.subPhase);
   const diceRolled = useGameStore((s) => s.diceRolled);
   const opportunityAccepted = useGameStore((s) => s.opportunityAccepted);
@@ -42,6 +48,12 @@ export default function DecisionPanel() {
       : isChatLoading
         ? "AI 正在回复，等它输出后再提交。"
         : "";
+  const submitReady = !isJudging && !isChatLoading && chatMessages.length > 0 && !isCrisisAndNotRolled;
+  const submitStatus = submitReady
+    ? finalAnswer.trim().length > 0
+      ? "准备出牌：已补充你的决策结论。"
+      : "准备出牌：可直接让 AI 整理行动卡。"
+    : disabledReason ? `出牌条件：${disabledReason}` : "";
 
   const handleSubmitDecision = () => {
     if (isJudging || isChatLoading || chatMessages.length === 0 || isCrisisAndNotRolled) return;
@@ -153,8 +165,32 @@ export default function DecisionPanel() {
         </div>
       )}
 
-      {/* Submit Button */}
+      {/* Fixed action area */}
       <div className="px-2.5 py-2 sm:px-3.5 sm:pb-3 sm:pt-0.5">
+        {(onOpenTaskIntel || onOpenAiAid) && (
+          <div className="mb-2 grid grid-cols-2 lg:grid-cols-1 gap-2">
+            {onOpenTaskIntel && (
+              <button
+                type="button"
+                onClick={onOpenTaskIntel}
+                className="rounded-xl border border-cyan-300/14 bg-cyan-400/[0.055] px-3 py-2 text-left transition hover:bg-cyan-400/[0.09]"
+              >
+                <div className="text-xs font-bold text-cyan-200">任务资料</div>
+                <div className="mt-0.5 text-[10px] text-white/34">查看/引用信息</div>
+              </button>
+            )}
+            {onOpenAiAid && (
+              <button
+                type="button"
+                onClick={onOpenAiAid}
+                className="lg:hidden rounded-xl border border-violet-300/14 bg-violet-400/[0.06] px-3 py-2 text-left transition hover:bg-violet-400/[0.1]"
+              >
+                <div className="text-xs font-bold text-violet-200">AI 外援</div>
+                <div className="mt-0.5 text-[10px] text-white/34">追问/推演方案</div>
+              </button>
+            )}
+          </div>
+        )}
         {judgeError && (
           <div
             className="mb-2 rounded-lg px-3 py-2 text-xs leading-relaxed text-amber-100"
@@ -166,9 +202,13 @@ export default function DecisionPanel() {
             {judgeError}
           </div>
         )}
-        {!judgeError && disabledReason && !isJudging && (
-          <div className="mb-2 text-center text-[11px] leading-relaxed text-white/38">
-            {disabledReason}
+        {!judgeError && submitStatus && !isJudging && (
+          <div className={`mb-2 rounded-lg px-2.5 py-1.5 text-center text-[11px] leading-relaxed border ${
+            submitReady
+              ? "text-emerald-100/72 bg-emerald-300/[0.055] border-emerald-300/[0.12]"
+              : "text-white/42 bg-white/[0.035] border-white/[0.06]"
+          }`}>
+            {submitStatus}
           </div>
         )}
         <button
@@ -186,7 +226,7 @@ export default function DecisionPanel() {
           {isJudging ? (
             <>
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span className="relative">AI评估中...</span>
+              <span className="relative">AI 评估中...</span>
             </>
           ) : isChatLoading ? (
             <>

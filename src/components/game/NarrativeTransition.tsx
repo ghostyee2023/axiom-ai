@@ -33,7 +33,7 @@ export default function NarrativeTransition() {
             <div className="mx-auto w-10 h-10 rounded-2xl flex items-center justify-center bg-violet-400/10 border border-violet-300/18">
               <Sparkles className="w-5 h-5 text-violet-200 animate-pulse" />
             </div>
-            <div className="text-xs font-bold text-cyan-200/70 tracking-[0.22em]">下一幕</div>
+            <div className="text-xs font-bold text-cyan-200/70 tracking-normal">下一幕</div>
             <h2 className="text-xl sm:text-2xl font-black text-white leading-snug">
               {reveal.title}
             </h2>
